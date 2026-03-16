@@ -23,10 +23,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install platformio
 
-      - name: Ensure native platform installed
+      - name: Ensure native platform installed (verbose)
         run: |
-          platformio platform install native || true
+          platformio platform install native --no-check || platformio platform install native || true
+          platformio platform list
+          platformio system info
 
       - name: Run PlatformIO tests (native)
         run: |
-          platformio test -e native --verbose
+          platformio test -e native -v
