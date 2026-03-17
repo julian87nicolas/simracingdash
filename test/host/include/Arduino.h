@@ -1,4 +1,4 @@
-// Minimal Arduino.h stub for host-side unit tests
+// Minimal Arduino.h stub for host-side unit tests (moved under test/host)
 #pragma once
 
 #include <cstdint>
@@ -10,7 +10,7 @@ using uint8_t = std::uint8_t;
 using uint16_t = std::uint16_t;
 using uint32_t = std::uint32_t;
 
-inline void delay(unsigned long ms) { /* noop for host tests */ }
+inline void delay(unsigned long ms) { (void)ms; }
 
 inline int min(int a, int b) { return (a < b) ? a : b; }
 inline int max(int a, int b) { return (a > b) ? a : b; }
@@ -26,12 +26,7 @@ struct SerialClass {
   void begin(int) {}
   void println(const char* s) { std::puts(s); }
   void print(const char* s) { std::fputs(s, stdout); }
-  void printf(const char* fmt, ...) {
-    va_list ap; va_start(ap, fmt); vprintf(fmt, ap); va_end(ap);
-  }
+  void printf(const char* fmt, ...) { va_list ap; va_start(ap, fmt); vprintf(fmt, ap); va_end(ap); }
 };
 
 extern SerialClass Serial;
-
-#include <cstdlib>
-

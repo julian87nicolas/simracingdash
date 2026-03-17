@@ -29,12 +29,7 @@ jobs:
           platformio platform list
           platformio system info
 
-      - name: Run host-side g++ tests (fallback)
+      - name: Run tests (PlatformIO native or g++ fallback)
         run: |
-          chmod +x tests/run_tests.sh || true
-          ./tests/run_tests.sh
-
-      - name: (Optional) Run PlatformIO tests (native)
-        if: false
-        run: |
-          platformio test -e native -v
+          chmod +x test/run_local.sh || true
+          ./test/run_local.sh

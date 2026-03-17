@@ -1,8 +1,8 @@
 #include <cassert>
 #include <cstring>
 #include <iostream>
-#include "../include/telemetry.h"
-#include "../include/telemetry_parser.h"
+#include "../../include/telemetry.h"
+#include "../../include/telemetry_parser.h"
 
 int main() {
   // Build a fake CarTelemetry packet buffer

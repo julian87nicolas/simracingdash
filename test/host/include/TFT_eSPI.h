@@ -1,8 +1,7 @@
-// Minimal TFT_eSPI stub for host-side unit tests
+// Minimal TFT_eSPI stub for host-side unit tests (moved under test/host)
 #pragma once
 #include <cstdint>
 #include <cstdio>
-#include <string>
 
 enum textdatum_t { MC_DATUM };
 

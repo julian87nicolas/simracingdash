@@ -1,7 +1,7 @@
 #include <cassert>
 #include <iostream>
-#include "../include/telemetry.h"
-#include "../tests/include/TFT_eSPI.h"
+#include "../../include/telemetry.h"
+#include "include/TFT_eSPI.h"
 
 // drawMainDashboard is defined in src/dashboards/dash_main.cpp; declare it here
 extern void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);

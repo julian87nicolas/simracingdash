@@ -1,6 +1,6 @@
 #include <cassert>
 #include <iostream>
-#include "../include/state.h"
+#include "../../include/state.h"
 
 int main() {
   StateManager sm;
