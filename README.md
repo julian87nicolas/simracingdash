@@ -112,10 +112,40 @@ Si querés, puedo generar instrucciones para flashear con esptool directamente, 
 
 ---
 
-Contacto y soporte
---
-Si encontrás errores o querés nuevas funcionalidades, abrí un issue o un PR en el repositorio.
+Uso del dashboard
+-----------------
 
+El firmware muestra diferentes pantallas automáticamente según la telemetría recibida. A continuación se explica qué muestra cada pantalla y cómo se cambia.
+
+- `MAIN` (pantalla principal):
+	- Gear: número grande centrado (N = neutral, R = reverse).
+	- Speed: velocidad en km/h mostrada grande.
+	- RPM bar: barra horizontal estilo "LEDs" que indica régimen del motor; zonas verde/naranja/roja.
+	- Throttle / Brake: barras de llenado que muestran posición del acelerador y freno.
+
+- `TYRES` (neumáticos):
+	- Muestra las 4 ruedas (FL/FR/RL/RR) con indicadores de temperatura y desgaste.
+	- Actualmente usa valores de status mínimos como placeholders; puede ampliarse para leer datos de temperatura por rueda en el parser.
+
+- `ERS`:
+	- Barra de energía ERS (0–1000 escala del juego).
+	- Indicador de modo de despliegue (`ersDeployMode`).
+
+- `DAMAGE`:
+	- Porcentajes de daño de componentes (alas, motor, etc.).
+	- Actualmente usa algunos campos de estado como valores aproximados; puede mapearse a datos reales si el parser se amplía.
+
+- `PITS`:
+	- Pantalla prioritaria cuando `pitStatus` indica que el coche está entrando/en box.
+
+Cómo se cambia la pantalla
+- Automático: el firmware selecciona la pantalla según `mfdPanelIndex`, `pitStatus` y condiciones críticas (p. ej. pit). El índice `mfdPanelIndex` lo controla el juego (MFD en HUD) y hará que cambie la vista cuando el piloto active el MFD.
+- Manual: actualmente no hay botones físicos configurados; podés añadir botones en el código (leer GPIOs) y llamar a `dashboard_update()` con la pantalla forzada.
+
+Uso y depuración
+- Serial: el firmware imprime mensajes de debug por Serial a `115200` — útil para depurar conexión WiFi, recepción UDP y parsing.
+- Ajustes de rendimiento: modifica el intervalo de render en `src/main.cpp` (variable `lastRender`) para cambiar la tasa de refresco (valor actual ≈ 25 FPS).
+- Ajustes de pantalla: edita `lib/TFT_eSPI/User_Setup.h` para ajustar pines, driver y frecuencia SPI.
 
 Tests
 -----
