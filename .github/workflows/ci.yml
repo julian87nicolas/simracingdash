@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install platformio
+
+      - name: Ensure native platform installed (verbose)
+        run: |
+          platformio platform install native --no-check || platformio platform install native || true
+          platformio platform list
+          platformio system info
+
+      - name: Run tests (force g++ fallback)
+        run: |
+          chmod +x test/run_local.sh || true
+          SKIP_PLATFORMIO=1 ./test/run_local.sh --no-pio

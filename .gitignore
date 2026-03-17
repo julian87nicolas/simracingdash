@@ -1,0 +1,26 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.vscode/
+/.platformio
+libdeps/
+
+# Build outputs
+/.pio/build/
+
+# Editor
+.DS_Store
+*.swp
+*.swo
+*.log
+
+# Mac
+.Spotlight-V100
+.Trashes
+
+# Python
+__pycache__/
+*.pyc
+
+# User settings
+env/*/private/
