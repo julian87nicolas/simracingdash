@@ -63,15 +63,19 @@ static IPAddress ipFromString(const char* s) {
 }
 
 static void handleRoot() {
-  String html = "<html><head><title>F1Dash Setup</title></head><body>";
-  html += "<h3>F1Dash Setup</h3>";
-  html += "<form method='POST' action='/save'>";
-  html += "SSID:<br><input name='ssid' maxlength='31' value='" + String(g_cfg.ssid) + "'><br>";
-  html += "Password:<br><input name='pass' maxlength='63' value=''><br>";
-  html += "Listen IP (optional):<br><input name='bind_ip' maxlength='15' value='" + String(g_cfg.bind_ip) + "'><br>";
-  html += "Listen Port:<br><input name='port' maxlength='6' value='" + String(g_cfg.port == 0 ? F1_UDP_PORT : g_cfg.port) + "'><br>";
-  html += "<br><input type='submit' value='Save'>";
-  html += "</form></body></html>";
+  String html = "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">";
+  html += "<title>F1Dash Setup</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:12px;}label{display:block;margin-top:8px;}input{width:100%;padding:8px;margin-top:4px;box-sizing:border-box;}button{margin-top:12px;padding:10px 14px;background:#0b79d0;color:#fff;border:none;border-radius:6px;}small{color:#666;}</style></head><body>";
+  html += "<h2>F1Dash Setup</h2><p>Conecta tu móvil a la WiFi <strong>F1Dash-Setup</strong> y abre cualquier página; serás redirigido aquí.</p>";
+  html += "<form method='POST' action='/save' onsubmit=\"return validate()\">";
+  html += "<label>SSID<input name='ssid' maxlength='31' placeholder='Tu SSID' value='" + String(g_cfg.ssid) + "'></label>";
+  html += "<label>Password<input name='pass' maxlength='63' placeholder='Contraseña (opcional)'></label>";
+  html += "<label>Listen IP (opcional) <small>ej. 192.168.1.50</small><input name='bind_ip' maxlength='15' placeholder='0.0.0.0' value='" + String(g_cfg.bind_ip) + "'></label>";
+  html += "<label>Listen Port <input name='port' maxlength='6' placeholder='20777' value='" + String(g_cfg.port == 0 ? F1_UDP_PORT : g_cfg.port) + "'></label>";
+  html += "<button type='submit'>Guardar y reiniciar</button>";
+  html += "</form>";
+  html += "<script>function validate(){let p=document.forms[0].port.value; if(p && (isNaN(p)||p<1||p>65535)){alert('Puerto inválido');return false;} return true;}";
+  html += "if(location.hostname!='" + WiFi.softAPIP().toString() + "') location.href='http://" + WiFi.softAPIP().toString() + "';</script>";
+  html += "</body></html>";
   server.send(200, "text/html", html);
 }
 
@@ -94,9 +98,31 @@ static void handleSave() {
     if (port > 0 && port <= 65535) g_cfg.port = (uint16_t)port;
   }
   saveConfig();
-  server.send(200, "text/html", "Saved config. Restarting...");
-  delay(1000);
+  server.send(200, "text/html", "Saved config. Reiniciando...");
+  delay(800);
   ESP.restart();
+}
+
+static void handleStatus() {
+  String out = "{";
+  // WiFi info
+  out += "\"wifi\":{\"status\":\"" + String(WiFi.status() == WL_CONNECTED ? "connected" : "disconnected") + "\",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
+  // UDP listen port
+  uint16_t listenPort = (g_cfg.port != 0) ? g_cfg.port : F1_UDP_PORT;
+  out += ",\"udp\":{\"listen_port\":" + String(listenPort) + "}";
+  // simple telemetry snapshot
+  const TelemetryFrame &f = stateMgr.current();
+  out += ",\"telemetry\":{";
+  out += "\"speed_kmh\":" + String((unsigned int)f.telemetry.speedKmh) + ",";
+  out += "\"rpm\":" + String((unsigned int)f.telemetry.rpm) + ",";
+  out += "\"gear\":" + String((int)f.telemetry.gear) + ",";
+  out += "\"throttle\":" + String((unsigned int)f.telemetry.throttle) + ",";
+  out += "\"brake\":" + String((unsigned int)f.telemetry.brake) + ",";
+  out += "\"fuel\":" + String(f.status.fuel, 2) + ",";
+  out += "\"ers\":" + String((unsigned int)f.status.ersEnergy);
+  out += "}";
+  out += "}";
+  server.send(200, "application/json", out);
 }
 
 static void startConfigPortal() {
@@ -106,8 +132,18 @@ static void startConfigPortal() {
   IPAddress apIP = WiFi.softAPIP();
   Serial.print("AP IP: "); Serial.println(apIP);
 
+  // Note: we don't run a DNS server here to avoid library/version conflicts.
+  // The portal relies on the HTTP redirect below; on most mobile clients
+  // opening any page will hit the AP and be redirected to the setup page.
+
   server.on("/", HTTP_GET, handleRoot);
   server.on("/save", HTTP_POST, handleSave);
+  // redirect any unknown request to root (helps captive portals on mobiles)
+  server.onNotFound([](){
+    server.sendHeader("Location", String("http://") + WiFi.softAPIP().toString(), true);
+    server.send(302, "text/plain", "");
+  });
+
   server.begin();
 
   // block here serving portal until restart (handleSave will restart)
@@ -127,6 +163,8 @@ void setup() {
 
   // If we have saved credentials, try to connect; otherwise start AP portal
   if (strlen(g_cfg.ssid) == 0) {
+    // register status endpoint even in AP mode
+    server.on("/status", HTTP_GET, handleStatus);
     startConfigPortal(); // does not return (restarts after save)
   }
 
@@ -180,12 +218,19 @@ void setup() {
     Serial.printf("Listening UDP port %d\n", listenPort);
   }
 
+  // register status endpoint and start webserver in STA mode
+  server.on("/status", HTTP_GET, handleStatus);
+  server.begin();
+
   // init display and dashboard
   dashboard_init(&tft);
 
 }
 
 void loop() {
+  // handle web server clients (status endpoint) in STA mode
+  server.handleClient();
+
   // read UDP packet
   size_t len = udp_read_packet(packetBuf, sizeof(packetBuf));
   if (len > 0) {

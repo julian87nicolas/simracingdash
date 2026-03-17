@@ -11,7 +11,7 @@ static int8_t prevGear = 127;
 static uint16_t prevRpm = 0;
 
 void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
-  // For emulator-friendly layout: clear and draw a wheel-like dashboard
+  // Clear and draw a wheel-like dashboard
   tft->fillScreen(TFT_BLACK);
 
   // RPM LED arc (30 segments)
