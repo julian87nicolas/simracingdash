@@ -4,16 +4,20 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "Run tests (prefer PlatformIO native, fallback to g++)"
 
-if command -v platformio >/dev/null 2>&1 || command -v pio >/dev/null 2>&1; then
-  PIO=$(command -v platformio || command -v pio)
-  echo "Found PlatformIO at: $PIO"
-  echo "Ensuring native platform is installed..."
-  $PIO platform install native --no-check || $PIO platform install native || true
-  echo "Listing installed platforms:"
-  $PIO platform list || true
-  echo "Running PlatformIO tests (native)..."
-  $PIO test -e native -v
-  exit 0
+if [ "$SKIP_PLATFORMIO" = "1" ] || [ "$1" = "--no-pio" ]; then
+  echo "SKIP_PLATFORMIO set; skipping PlatformIO and using g++ fallback"
+else
+  if command -v platformio >/dev/null 2>&1 || command -v pio >/dev/null 2>&1; then
+    PIO=$(command -v platformio || command -v pio)
+    echo "Found PlatformIO at: $PIO"
+    echo "Ensuring native platform is installed..."
+    $PIO platform install native --no-check || $PIO platform install native || true
+    echo "Listing installed platforms:"
+    $PIO platform list || true
+    echo "Running PlatformIO tests (native)..."
+    $PIO test -e native -v
+    exit 0
+  fi
 fi
 
 echo "PlatformIO not found. Falling back to g++ host tests..."

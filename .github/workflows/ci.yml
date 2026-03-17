@@ -29,7 +29,7 @@ jobs:
           platformio platform list
           platformio system info
 
-      - name: Run tests (PlatformIO native or g++ fallback)
+      - name: Run tests (force g++ fallback)
         run: |
           chmod +x test/run_local.sh || true
-          ./test/run_local.sh
+          SKIP_PLATFORMIO=1 ./test/run_local.sh --no-pio
