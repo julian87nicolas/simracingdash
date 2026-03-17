@@ -205,4 +205,36 @@ Notas:
 - El emulador usa los mismos módulos de parsing, state y dashboard del proyecto, por lo que sirve para validar la lógica sin hardware.
 - Si prefieres una visualización más rica, podríamos adaptar las funciones de `TFT_eSPI` del emulador para volcar en una ventana SDL o crear imágenes PNG.
 
+Scripts (conveniencia)
+----------------------
+
+Se incluyen scripts para simplificar la compilación y ejecución en `scripts/`.
+
+- `scripts/build_emulator.sh`: compila el emulador C++ y coloca el binario en `build/emulator`.
+- `scripts/build_sender.sh`: compila el emisor Go y coloca el binario en `build/telemetry_sender`.
+- `scripts/build_all.sh`: ejecuta ambos builds.
+- `scripts/run_emulator.sh`: ejecuta `build/emulator`.
+- `scripts/run_sender.sh`: ejecuta `build/telemetry_sender` (acepta un argumento `IP:PORT`, por defecto `127.0.0.1:20777`).
+- `scripts/run_both.sh`: compila todo, arranca el emulador en background y ejecuta el emisor; mata el emulador al terminar.
+
+Ejemplos rápidos:
+
+```bash
+# construir todo
+./scripts/build_all.sh
+
+# ejecutar emulador (terminal A)
+./scripts/run_emulator.sh
+
+# ejecutar emisor (terminal B)
+./scripts/run_sender.sh 127.0.0.1:20777
+
+# o lanzar ambos (builder + emulador + emisor)
+./scripts/run_both.sh 127.0.0.1:20777
+```
+
+Notas sobre salida en terminal:
+- El emulador usa secuencias ANSI para redibujar la pantalla "en sitio" (sin hacer scroll). Si ves muchas líneas nuevas, asegúrate de ejecutar el binario recién compilado y de no tener instancias antiguas corriendo.
+- Si quieres una visual más detallada puedo aumentar la resolución del canvas ASCII o crear una versión SDL/PNG.
+
 

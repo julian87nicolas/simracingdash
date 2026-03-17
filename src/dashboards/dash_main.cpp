@@ -10,53 +10,50 @@ static int8_t prevGear = 127;
 static uint16_t prevRpm = 0;
 
 void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
-  // Speed
-  uint16_t speed = frame.telemetry.speedKmh;
-  if (speed != prevSpeed) {
-    tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    tft->setTextSize(4);
-    tft->setCursor(10, 20);
-    tft->printf("%3u km/h  ", speed);
-    prevSpeed = speed;
-  }
+  // For emulator-friendly layout: clear and draw a wheel-like dashboard
+  tft->fillScreen(TFT_BLACK);
 
-  // Gear large centered
-  int8_t gear = frame.telemetry.gear;
-  if (gear != prevGear) {
-    tft->fillRect(220, 40, 120, 120, TFT_BLACK);
-    tft->setTextDatum(MC_DATUM);
-    tft->setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft->setTextSize(8);
-    char gtxt[8];
-    if (gear == 0) strcpy(gtxt, "N");
-    else if (gear == -1) strcpy(gtxt, "R");
-    else snprintf(gtxt, sizeof(gtxt), "%d", gear);
-    tft->drawString(gtxt, 280, 100);
-    prevGear = gear;
-  }
-
-  // RPM Bar (horizontal LED-style)
+  // RPM LED arc (30 segments)
   uint16_t rpm = frame.telemetry.rpm;
-  if (rpm != prevRpm) {
-    const int barX = 10, barY = 160, barW = 460, barH = 20;
-    tft->fillRect(barX, barY, barW, barH, TFT_DARKGREY);
-    // Map RPM (0-15000) to bar width
-    uint16_t maxRpm = 15000;
-    int fillW = map(min(rpm, maxRpm), 0, maxRpm, 0, barW);
-    uint16_t color = (rpm > 12000) ? TFT_RED : (rpm > 8000) ? TFT_ORANGE : TFT_GREEN;
-    tft->fillRect(barX, barY, fillW, barH, color);
-    prevRpm = rpm;
+  const int segs = 30;
+  const int segW = 460 / segs;
+  const int segX = 10;
+  const int segY = 20;
+  const int segH = 10;
+  for (int i = 0; i < segs; ++i) {
+    // threshold per segment
+    uint16_t threshold = (uint16_t)((i+1) * (15000.0f / segs));
+    uint32_t col = (threshold > 12000) ? TFT_RED : (threshold > 8000) ? TFT_ORANGE : TFT_GREEN;
+    tft->fillRect(segX + i*segW, segY, segW-1, segH, (rpm >= threshold) ? col : TFT_DARKGREY);
   }
 
-  // Throttle & Brake bars
+  // Gear in center
+  int8_t gear = frame.telemetry.gear;
+  tft->setTextDatum(MC_DATUM);
+  tft->setTextColor(TFT_YELLOW, TFT_BLACK);
+  char gtxt[8];
+  if (gear == 0) strcpy(gtxt, "N");
+  else if (gear == -1) strcpy(gtxt, "R");
+  else snprintf(gtxt, sizeof(gtxt), "%d", gear);
+  tft->drawString(gtxt, 240, 120);
+
+  // Speed below center
+  uint16_t speed = frame.telemetry.speedKmh;
+  tft->setTextColor(TFT_WHITE, TFT_BLACK);
+  tft->drawString((std::string(std::to_string(speed) + " km/h")).c_str(), 200, 200);
+
+  // Throttle & Brake small bars
   int th = frame.telemetry.throttle; // 0-255
   int br = frame.telemetry.brake;
-  const int w = 220, h = 14;
-  // throttle
-  tft->fillRect(10, 190, w, h, TFT_DARKGREY);
-  tft->fillRect(10, 190, map(th, 0, 255, 0, w), h, TFT_GREEN);
-  // brake
-  tft->fillRect(250, 190, w, h, TFT_DARKGREY);
-  tft->fillRect(250, 190, map(br, 0, 255, 0, w), h, TFT_RED);
+  const int bw = 40, bh = 4;
+  // left throttle
+  tft->fillRect(100, 240, bw, bh, TFT_DARKGREY);
+  tft->fillRect(100, 240, map(th, 0, 255, 0, bw), bh, TFT_GREEN);
+  // right brake
+  tft->fillRect(340, 240, bw, bh, TFT_DARKGREY);
+  tft->fillRect(340, 240, map(br, 0, 255, 0, bw), bh, TFT_RED);
 
+  prevRpm = rpm;
+  prevSpeed = speed;
+  prevGear = gear;
 }

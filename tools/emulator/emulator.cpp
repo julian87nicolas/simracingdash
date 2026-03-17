@@ -31,6 +31,7 @@ int main() {
   EmulatorTFT:;
   TFT_eSPI tft;
   dashboard_init(&tft);
+  tft.fillScreen(TFT_BLACK);
   StateManager state;
 
   while (true) {
@@ -39,12 +40,9 @@ int main() {
     TelemetryFrame frame = state.current();
     telemetry_parse(buf, (size_t)n, frame);
     state.updateFrame(frame);
-    // Print parsed values
-    const auto &f = state.current();
-    std::cout << "--- Frame id="<< f.frameIdentifier <<" speed="<< f.telemetry.speedKmh <<" rpm="<< f.telemetry.rpm
-              <<" gear="<< (int)f.telemetry.gear <<" throttle="<<(int)f.telemetry.throttle <<" brake="<<(int)f.telemetry.brake
-              <<" mfd="<<(int)f.telemetry.mfdPanelIndex <<" pit="<<(int)f.lap.pitStatus <<" ers="<<f.status.ersEnergy <<"\n";
     dashboard_update(state);
+    // redraw canvas in-place
+    tft.flush();
   }
 
   close(sockfd);
