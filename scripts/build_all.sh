@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-./scripts/build_emulator.sh
+# Build only the telemetry sender (emulator removed)
 ./scripts/build_sender.sh
 
 echo "All built."

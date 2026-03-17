@@ -1,6 +1,7 @@
 #include <TFT_eSPI.h>
 #include "telemetry.h"
 #include <Arduino.h>
+#include <cstring>
 
 // Draw main dashboard: gear, speed, RPM bar, throttle & brake bars.
 // Uses partial updates by redrawing small rectangles.
@@ -40,7 +41,9 @@ void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
   // Speed below center
   uint16_t speed = frame.telemetry.speedKmh;
   tft->setTextColor(TFT_WHITE, TFT_BLACK);
-  tft->drawString((std::string(std::to_string(speed) + " km/h")).c_str(), 200, 200);
+  char sbuf[32];
+  snprintf(sbuf, sizeof(sbuf), "%u km/h", (unsigned int)speed);
+  tft->drawString(sbuf, 200, 200);
 
   // Throttle & Brake small bars
   int th = frame.telemetry.throttle; // 0-255

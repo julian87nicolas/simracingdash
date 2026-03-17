@@ -65,6 +65,37 @@ platformio run -e nodemcuv2 -t upload
 platformio device monitor -e nodemcuv2 -b 115200
 ```
 
+**Flasheo al ESP8266 (NodeMCU v2)**
+
+- Usando PlatformIO (recomendado): compila y sube directamente al puerto serie detectado.
+
+```bash
+# compilar y subir (reemplaza el entorno si lo cambiaste)
+platformio run -e nodemcuv2 -t upload
+
+# abrir monitor serie (115200 baudios)
+platformio device monitor -e nodemcuv2 -b 115200
+```
+
+- Si prefieres usar `esptool.py` manualmente (necesitas compilar primero):
+
+```bash
+# compilar sin subir
+platformio run -e nodemcuv2
+
+# firmware resultante (ejemplo): .pio/build/nodemcuv2/firmware.bin
+# identifica el puerto serie en macOS con: ls /dev/tty.*  o pio device list
+esptool.py --port /dev/tty.SOME_USB_PORT write_flash 0x00000 .pio/build/nodemcuv2/firmware.bin
+
+# luego abrir monitor serie
+platformio device monitor -e nodemcuv2 -b 115200
+```
+
+Notas rápidas:
+- En macOS los puertos suelen verse como `/dev/tty.SLAB_USBtoUART` o `/dev/tty.usbserial-XXXX`.
+- Si PlatformIO no detecta el puerto, ejecuta `platformio device list`.
+- El firmware ahora incluye un portal de configuración WiFi: si el ESP no tiene credenciales guardadas arrancará como AP `F1Dash-Setup` en la IP 192.168.4.1.
+
 Si no tienes PlatformIO en el PATH, usa `pio` (alias) o la extensión PlatformIO en VS Code.
 
 **Pruebas (unificadas)**
@@ -161,75 +192,45 @@ PlatformIO tests live under `test/` (Unity). Host-side helper tests live under `
 Emulación local (sin placa ni pantalla)
 -------------------------------------
 
-Puedes probar la mayor parte del firmware en tu máquina sin hardware usando dos herramientas incluidas:
+Puedes probar la lógica de parser y envío de telemetría usando el emisor incluido:
 
 - `tools/telemetry_sender`: pequeño servidor en Go que envía paquetes UDP simulando telemetría de F1.
-- `tools/emulator`: emulador en C++ que escucha en el puerto UDP 20777, usa el parser y el dashboard manager y "renderiza" en la consola (simula la pantalla).
 
-Compilar y ejecutar:
-
-1) Compilar el emulador (requiere g++):
-
-```bash
-mkdir -p build
-g++ -std=c++17 \
-	-Itools/emulator -Itest/host/include -Iinclude \
-	src/telemetry_parser.cpp src/state.cpp src/dashboard_manager.cpp \
-	src/dashboards/dash_main.cpp src/dashboards/dash_tyres.cpp src/dashboards/dash_ers.cpp src/dashboards/dash_damage.cpp \
-	tools/emulator/emulator.cpp -o build/emulator
-```
-
-2) Compilar el emisor Go:
+Compilar y ejecutar el emisor:
 
 ```bash
 cd tools/telemetry_sender
 go build -o ../../build/telemetry_sender main.go
 cd -
-```
 
-3) Ejecutar emulador y emisor en dos terminales:
-
-Terminal A (emulador):
-```bash
-./build/emulator
-```
-
-Terminal B (emisor):
-```bash
+# ejecutar el emisor apuntando a la IP:PORT del receptor (por defecto 127.0.0.1:20777)
 ./build/telemetry_sender -addr 127.0.0.1:20777
 ```
 
-Verás en el emulador la salida parseada (speed, rpm, gear, mfd, etc.) y las llamadas "de dibujo" que imprimen el contenido que iría a la pantalla.
-
 Notas:
-- El emulador usa los mismos módulos de parsing, state y dashboard del proyecto, por lo que sirve para validar la lógica sin hardware.
-- Si prefieres una visualización más rica, podríamos adaptar las funciones de `TFT_eSPI` del emulador para volcar en una ventana SDL o crear imágenes PNG.
+- El emisor permite probar que el receptor (ESP o cualquier listener UDP) reciba paquetes correctamente.
 
 Scripts (conveniencia)
 ----------------------
 
 Se incluyen scripts para simplificar la compilación y ejecución en `scripts/`.
 
-- `scripts/build_emulator.sh`: compila el emulador C++ y coloca el binario en `build/emulator`.
+
 - `scripts/build_sender.sh`: compila el emisor Go y coloca el binario en `build/telemetry_sender`.
-- `scripts/build_all.sh`: ejecuta ambos builds.
-- `scripts/run_emulator.sh`: ejecuta `build/emulator`.
+- `scripts/build_all.sh`: compila los artefactos necesarios (ahora solo el emisor).
 - `scripts/run_sender.sh`: ejecuta `build/telemetry_sender` (acepta un argumento `IP:PORT`, por defecto `127.0.0.1:20777`).
-- `scripts/run_both.sh`: compila todo, arranca el emulador en background y ejecuta el emisor; mata el emulador al terminar.
+- `scripts/run_both.sh`: construye y ejecuta el emisor.
 
 Ejemplos rápidos:
 
 ```bash
-# construir todo
+# construir todo (emisor)
 ./scripts/build_all.sh
 
-# ejecutar emulador (terminal A)
-./scripts/run_emulator.sh
-
-# ejecutar emisor (terminal B)
+# ejecutar emisor (terminal)
 ./scripts/run_sender.sh 127.0.0.1:20777
 
-# o lanzar ambos (builder + emulador + emisor)
+# o construir y ejecutar (scripts/run_both.sh)
 ./scripts/run_both.sh 127.0.0.1:20777
 ```
 

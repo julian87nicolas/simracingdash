@@ -1,5 +1,6 @@
 #include "telemetry_parser.h"
 #include <Arduino.h>
+#include <cstring>
 #include "telemetry.h"
 
 // Helper: safe reads (little-endian)

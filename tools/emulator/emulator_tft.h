@@ -153,4 +153,7 @@ private:
     return 37;
   }
 };
+// Emulator functionality removed.
+// This header is intentionally empty to remove emulator-specific code from the repository.
+#pragma once
 
