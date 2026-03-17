@@ -158,3 +158,51 @@ Run unified tests (prefer PlatformIO native, fallback to g++ host builds):
 
 PlatformIO tests live under `test/` (Unity). Host-side helper tests live under `test/host/`.
 
+Emulación local (sin placa ni pantalla)
+-------------------------------------
+
+Puedes probar la mayor parte del firmware en tu máquina sin hardware usando dos herramientas incluidas:
+
+- `tools/telemetry_sender`: pequeño servidor en Go que envía paquetes UDP simulando telemetría de F1.
+- `tools/emulator`: emulador en C++ que escucha en el puerto UDP 20777, usa el parser y el dashboard manager y "renderiza" en la consola (simula la pantalla).
+
+Compilar y ejecutar:
+
+1) Compilar el emulador (requiere g++):
+
+```bash
+mkdir -p build
+g++ -std=c++17 \
+	-Itools/emulator -Itest/host/include -Iinclude \
+	src/telemetry_parser.cpp src/state.cpp src/dashboard_manager.cpp \
+	src/dashboards/dash_main.cpp src/dashboards/dash_tyres.cpp src/dashboards/dash_ers.cpp src/dashboards/dash_damage.cpp \
+	tools/emulator/emulator.cpp -o build/emulator
+```
+
+2) Compilar el emisor Go:
+
+```bash
+cd tools/telemetry_sender
+go build -o ../../build/telemetry_sender main.go
+cd -
+```
+
+3) Ejecutar emulador y emisor en dos terminales:
+
+Terminal A (emulador):
+```bash
+./build/emulator
+```
+
+Terminal B (emisor):
+```bash
+./build/telemetry_sender -addr 127.0.0.1:20777
+```
+
+Verás en el emulador la salida parseada (speed, rpm, gear, mfd, etc.) y las llamadas "de dibujo" que imprimen el contenido que iría a la pantalla.
+
+Notas:
+- El emulador usa los mismos módulos de parsing, state y dashboard del proyecto, por lo que sirve para validar la lógica sin hardware.
+- Si prefieres una visualización más rica, podríamos adaptar las funciones de `TFT_eSPI` del emulador para volcar en una ventana SDL o crear imágenes PNG.
+
+
