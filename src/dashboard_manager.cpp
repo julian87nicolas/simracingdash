@@ -7,45 +7,137 @@
 
 // Forward declarations for dashboard draw functions
 void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
+void drawSetupDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
+void drawPitsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
 void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
-void drawERSDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
-void drawDamageDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
+void drawTempsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
+void drawEngineDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
+void resetMainDashboardCache();
+void resetSetupDashboardCache();
+void resetPitsDashboardCache();
+void resetTyresDashboardCache();
+void resetTempsDashboardCache();
+void resetEngineDashboardCache();
 
 static TFT_eSPI* g_tft = nullptr;
-static DashboardScreen currentScreen = DashboardScreen::MAIN;
-static TelemetryFrame lastFrame{};
+static DashboardScreen currentScreen = DashboardScreen::NONE;  // NONE forces tab draw on first update
 static bool g_showNetworkInfo = false;
+
+static uint8_t g_rawMfd = 255;
+static uint8_t g_stableMfd = 255;
+static uint32_t g_mfdChangeMs = 0;
+static const uint32_t MFD_DEBOUNCE_MS = 200;
+
+// Session type tracking for MFD mapping
+static uint8_t g_sessionType = 0;
+static bool isRaceSession() { return g_sessionType >= 10 && g_sessionType <= 12; }
+
+// MFD index → screen mapping — varies by session type!
+// Race:     0=Setup, 1=Pits, 2=Tyres, 3=Temps, 4=Engine
+// Non-race: 0=Setup, 1=Tyres, 2=Temps, 3=Engine  (no Pits panel)
+static DashboardScreen mapMfdToScreen(uint8_t mfd) {
+  if (isRaceSession()) {
+    switch (mfd) {
+      case 0: return DashboardScreen::SETUP;
+      case 1: return DashboardScreen::PITS;
+      case 2: return DashboardScreen::TYRES;
+      case 3: return DashboardScreen::TEMPS;
+      case 4: return DashboardScreen::ENGINE;
+      default: return DashboardScreen::MAIN;
+    }
+  } else {
+    // Practice, qualifying, time trial — no pit stop panel
+    switch (mfd) {
+      case 0: return DashboardScreen::SETUP;
+      case 1: return DashboardScreen::TYRES;
+      case 2: return DashboardScreen::TEMPS;
+      case 3: return DashboardScreen::ENGINE;
+      default: return DashboardScreen::MAIN;
+    }
+  }
+}
+
+static void resetAllDashboardCaches() {
+  resetMainDashboardCache();
+  resetSetupDashboardCache();
+  resetPitsDashboardCache();
+  resetTyresDashboardCache();
+  resetTempsDashboardCache();
+  resetEngineDashboardCache();
+}
+
+static const char* screenLabel(DashboardScreen s) {
+  switch (s) {
+    case DashboardScreen::MAIN:   return "RACE";
+    case DashboardScreen::SETUP:  return "SETUP";
+    case DashboardScreen::PITS:   return "PITS";
+    case DashboardScreen::TYRES:  return "TYRES";
+    case DashboardScreen::TEMPS:  return "TEMPS";
+    case DashboardScreen::ENGINE: return "MOTOR";
+  }
+  return "?";
+}
+
+static void drawScreenTab(TFT_eSPI* tft, DashboardScreen active) {
+  const DashboardScreen tabs[] = {
+    DashboardScreen::MAIN,  DashboardScreen::SETUP,
+    DashboardScreen::PITS,  DashboardScreen::TYRES,
+    DashboardScreen::TEMPS, DashboardScreen::ENGINE
+  };
+  const int N = 6;
+  const int tabW = 480 / N; // 80px each
+  const int tabY = 300;
+  const int tabH = 20;
+  for (int i = 0; i < N; ++i) {
+    bool sel = (tabs[i] == active);
+    uint16_t bg = sel ? TFT_WHITE : 0x2104;
+    uint16_t fg = sel ? TFT_BLACK : TFT_DARKGREY;
+    tft->fillRect(i * tabW, tabY, tabW, tabH, bg);
+    tft->setTextDatum(MC_DATUM);
+    tft->setTextFont(2);
+    tft->setTextSize(1);
+    tft->setTextColor(fg, bg);
+    tft->drawString(screenLabel(tabs[i]), i * tabW + tabW / 2, tabY + tabH / 2);
+  }
+}
 
 void dashboard_init(TFT_eSPI* tft) {
   g_tft = tft;
   g_tft->init();
   g_tft->setRotation(1);
-  // Quick panel test pattern to verify command/data path on boot.
-  g_tft->fillScreen(TFT_RED);
-  delay(180);
-  g_tft->fillScreen(TFT_GREEN);
-  delay(180);
-  g_tft->fillScreen(TFT_BLUE);
-  delay(180);
   g_tft->fillScreen(TFT_BLACK);
   g_tft->setTextFont(2);
   g_tft->setTextSize(1);
 
-  // Boot greeting screen
   g_tft->setTextColor(TFT_WHITE, TFT_BLACK);
   g_tft->setTextDatum(MC_DATUM);
-  g_tft->drawString("SIMRACING DASH", 240, 130);
+  g_tft->drawString("SIMRACING DASH", 240, 140);
   g_tft->setTextColor(TFT_CYAN, TFT_BLACK);
-  g_tft->drawString("Iniciando...", 240, 165);
-  delay(1200);
-  g_tft->setTextDatum(TL_DATUM);
+  g_tft->drawString("Iniciando...", 240, 170);
+  delay(800);
   g_tft->fillScreen(TFT_BLACK);
 }
 
 static DashboardScreen selectScreenFromState(const StateManager &state) {
   const auto &f = state.current();
-  // Keep MAIN readable as primary view while telemetry mapping is refined.
-  if (f.lap.pitStatus != 0) return DashboardScreen::PITS;
+  g_sessionType = f.sessionType;  // keep session type updated
+  uint8_t mfd = f.telemetry.mfdPanelIndex;
+  uint32_t now = millis();
+
+  // Debounce: track raw → stable transition
+  if (mfd != g_rawMfd) {
+    g_rawMfd = mfd;
+    g_mfdChangeMs = now;
+  }
+  if ((now - g_mfdChangeMs) >= MFD_DEBOUNCE_MS) {
+    g_stableMfd = g_rawMfd;
+  }
+
+  // When MFD is open (0-4), show that screen
+  if (g_stableMfd <= 4) {
+    return mapMfdToScreen(g_stableMfd);
+  }
+  // When MFD is closed (255), return to main race screen
   return DashboardScreen::MAIN;
 }
 
@@ -83,7 +175,9 @@ void dashboard_hideNetworkInfo() {
   if (!g_tft) return;
   if (!g_showNetworkInfo) return;
   g_showNetworkInfo = false;
+  resetAllDashboardCaches();
   g_tft->fillScreen(TFT_BLACK);
+  drawScreenTab(g_tft, currentScreen);
 }
 
 void dashboard_update(const StateManager &state) {
@@ -91,20 +185,19 @@ void dashboard_update(const StateManager &state) {
   if (g_showNetworkInfo) return;
   DashboardScreen screen = selectScreenFromState(state);
   if (screen != currentScreen) {
-    // simple screen change: clear small areas
+    resetAllDashboardCaches();
     g_tft->fillScreen(TFT_BLACK);
+    drawScreenTab(g_tft, screen);
     currentScreen = screen;
   }
 
-  // Call renderers (they should attempt partial updates internally)
   const TelemetryFrame &f = state.current();
   switch (currentScreen) {
-    case DashboardScreen::MAIN: drawMainDashboard(g_tft, f); break;
-    case DashboardScreen::TYRES: drawTyresDashboard(g_tft, f); break;
-    case DashboardScreen::ERS: drawERSDashboard(g_tft, f); break;
-    case DashboardScreen::DAMAGE: drawDamageDashboard(g_tft, f); break;
-    case DashboardScreen::PITS: drawDamageDashboard(g_tft, f); break; // reuse damage view for pits
+    case DashboardScreen::MAIN:   drawMainDashboard(g_tft, f);   break;
+    case DashboardScreen::SETUP:  drawSetupDashboard(g_tft, f);  break;
+    case DashboardScreen::PITS:   drawPitsDashboard(g_tft, f);   break;
+    case DashboardScreen::TYRES:  drawTyresDashboard(g_tft, f);  break;
+    case DashboardScreen::TEMPS:  drawTempsDashboard(g_tft, f);  break;
+    case DashboardScreen::ENGINE: drawEngineDashboard(g_tft, f); break;
   }
-
-  lastFrame = f;
 }

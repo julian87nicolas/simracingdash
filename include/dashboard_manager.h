@@ -4,11 +4,13 @@
 #include "state.h"
 
 enum class DashboardScreen {
-  MAIN,
-  TYRES,
-  ERS,
-  DAMAGE,
-  PITS
+  NONE,     // Sentinel: no screen drawn yet (forces initial tab bar render)
+  MAIN,     // Default race screen
+  SETUP,    // MFD 0: brake bias, differential, ERS deploy
+  PITS,     // MFD 1: pit stop config
+  TYRES,    // MFD 2: tyre wear status
+  TEMPS,    // MFD 3: temperatures
+  ENGINE    // MFD 4: engine component wear
 };
 
 // Initialize dashboard manager with TFT instance
