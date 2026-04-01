@@ -32,9 +32,9 @@ struct LapData {
 
 // Packet detection constants
 namespace F1Packets {
-  constexpr uint8_t PACKET_ID_CAR_TELEMETRY = 6; // common in F1 UDP spec (may vary by year)
+  constexpr uint8_t PACKET_ID_LAP_DATA = 2;
+  constexpr uint8_t PACKET_ID_CAR_TELEMETRY = 6;
   constexpr uint8_t PACKET_ID_CAR_STATUS = 7;
-  constexpr uint8_t PACKET_ID_LAP_DATA = 9;
 }
 
 // Lightweight parser result container

@@ -25,15 +25,15 @@ BIN_DIR="$ROOT_DIR/test/host/bin"
 mkdir -p "$BIN_DIR"
 
 echo "Compiling telemetry parser test..."
-g++ -std=c++17 -I$ROOT_DIR/test/host/include -I$ROOT_DIR/include -I$ROOT_DIR/src -I$ROOT_DIR/lib/ArduinoStub/src -I$ROOT_DIR/lib/TFT_eSPI/src -I$ROOT_DIR/lib/ESP8266Stub/src \
+g++ -std=c++17 -I$ROOT_DIR/test/host/include -I$ROOT_DIR/include -I$ROOT_DIR/src -I$ROOT_DIR/test/stubs/ArduinoStub/src -I$ROOT_DIR/lib/TFT_eSPI/src -I$ROOT_DIR/test/stubs/ESP8266Stub/src \
   $ROOT_DIR/src/telemetry_parser.cpp $ROOT_DIR/test/host/test_telemetry_parser.cpp $ROOT_DIR/test/host/serial_stub.cpp -o $BIN_DIR/test_telemetry_parser
 
 echo "Compiling state manager test..."
-g++ -std=c++17 -I$ROOT_DIR/test/host/include -I$ROOT_DIR/include -I$ROOT_DIR/src -I$ROOT_DIR/lib/ArduinoStub/src -I$ROOT_DIR/lib/TFT_eSPI/src -I$ROOT_DIR/lib/ESP8266Stub/src \
+g++ -std=c++17 -I$ROOT_DIR/test/host/include -I$ROOT_DIR/include -I$ROOT_DIR/src -I$ROOT_DIR/test/stubs/ArduinoStub/src -I$ROOT_DIR/lib/TFT_eSPI/src -I$ROOT_DIR/test/stubs/ESP8266Stub/src \
   $ROOT_DIR/src/state.cpp $ROOT_DIR/test/host/test_state_manager.cpp $ROOT_DIR/test/host/serial_stub.cpp -o $BIN_DIR/test_state_manager
 
 echo "Compiling dashboard render test..."
-g++ -std=c++17 -I$ROOT_DIR/test/host/include -I$ROOT_DIR/include -I$ROOT_DIR/src -I$ROOT_DIR/lib/ArduinoStub/src -I$ROOT_DIR/lib/TFT_eSPI/src -I$ROOT_DIR/lib/ESP8266Stub/src \
+g++ -std=c++17 -I$ROOT_DIR/test/host/include -I$ROOT_DIR/include -I$ROOT_DIR/src -I$ROOT_DIR/test/stubs/ArduinoStub/src -I$ROOT_DIR/lib/TFT_eSPI/src -I$ROOT_DIR/test/stubs/ESP8266Stub/src \
   $ROOT_DIR/src/dashboards/dash_main.cpp $ROOT_DIR/test/host/test_dashboard.cpp $ROOT_DIR/test/host/serial_stub.cpp -o $BIN_DIR/test_dashboard
 
 echo "Running tests..."

@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <cstdio>
+#include <cstring>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
@@ -13,7 +15,6 @@ struct SavedConfig {
   uint32_t magic;
   char ssid[32];
   char pass[64];
-  char bind_ip[16];
   uint16_t port;
 };
 static const uint32_t CONFIG_MAGIC = 0xA5A5A5A5;
@@ -30,12 +31,16 @@ static ESP8266WebServer server(80);
 
 // Display instance
 static TFT_eSPI tft = TFT_eSPI();
+static bool g_displayInit = false;
 
 // Buffers
-static uint8_t packetBuf[1024]; // keep small to save RAM
+static uint8_t packetBuf[1500]; // F1 telemetry packets can be ~1352 bytes
 
 // State
 static StateManager stateMgr;
+static uint16_t g_listenPort = F1_UDP_PORT;
+static uint32_t g_lastPacketMs = 0;
+static bool g_networkInfoVisible = false;
 
 // helpers
 static void loadConfig() {
@@ -54,12 +59,40 @@ static void saveConfig() {
   EEPROM.commit();
 }
 
-static IPAddress ipFromString(const char* s) {
-  int a,b,c,d;
-  if (sscanf(s, "%d.%d.%d.%d", &a,&b,&c,&d) == 4) {
-    return IPAddress(a,b,c,d);
-  }
-  return IPAddress(0,0,0,0);
+static void ensureDisplayInit() {
+  if (g_displayInit) return;
+  tft.init();
+  tft.setRotation(1);
+  // Color test to wake up the panel
+  tft.fillScreen(TFT_RED);   delay(150);
+  tft.fillScreen(TFT_GREEN); delay(150);
+  tft.fillScreen(TFT_BLUE);  delay(150);
+  tft.fillScreen(TFT_BLACK);
+  g_displayInit = true;
+}
+
+static void showConfigByIPScreen(const IPAddress &apIP) {
+  ensureDisplayInit();
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextFont(4);
+
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  tft.drawString("WiFi no configurado", 240, 40);
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.drawString("Configura en:", 240, 90);
+
+  tft.setTextColor(TFT_CYAN, TFT_BLACK);
+  String url = "http://" + apIP.toString();
+  tft.drawString(url.c_str(), 240, 140);
+
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.drawString("SSID: F1Dash-Setup", 240, 200);
+
+  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  tft.setTextFont(2);
+  tft.drawString("Conecta a esa red y abre la URL", 240, 260);
 }
 
 static void handleRoot() {
@@ -69,7 +102,6 @@ static void handleRoot() {
   html += "<form method='POST' action='/save' onsubmit=\"return validate()\">";
   html += "<label>SSID<input name='ssid' maxlength='31' placeholder='Tu SSID' value='" + String(g_cfg.ssid) + "'></label>";
   html += "<label>Password<input name='pass' maxlength='63' placeholder='Contraseña (opcional)'></label>";
-  html += "<label>Listen IP (opcional) <small>ej. 192.168.1.50</small><input name='bind_ip' maxlength='15' placeholder='0.0.0.0' value='" + String(g_cfg.bind_ip) + "'></label>";
   html += "<label>Listen Port <input name='port' maxlength='6' placeholder='20777' value='" + String(g_cfg.port == 0 ? F1_UDP_PORT : g_cfg.port) + "'></label>";
   html += "<button type='submit'>Guardar y reiniciar</button>";
   html += "</form>";
@@ -87,10 +119,6 @@ static void handleSave() {
   if (server.hasArg("pass")) {
     String p = server.arg("pass");
     p.toCharArray(g_cfg.pass, sizeof(g_cfg.pass));
-  }
-  if (server.hasArg("bind_ip")) {
-    String ip = server.arg("bind_ip");
-    ip.toCharArray(g_cfg.bind_ip, sizeof(g_cfg.bind_ip));
   }
   if (server.hasArg("port")) {
     String sp = server.arg("port");
@@ -131,6 +159,7 @@ static void startConfigPortal() {
   WiFi.softAP("F1Dash-Setup");
   IPAddress apIP = WiFi.softAPIP();
   Serial.print("AP IP: "); Serial.println(apIP);
+  showConfigByIPScreen(apIP);
 
   // Note: we don't run a DNS server here to avoid library/version conflicts.
   // The portal relies on the HTTP redirect below; on most mobile clients
@@ -185,37 +214,12 @@ void setup() {
     startConfigPortal();
   }
 
-  // If user requested a specific bind IP, attempt to apply static IP using
-  // gateway/subnet discovered via DHCP above. Reconnect with static IP.
-  if (strlen(g_cfg.bind_ip) > 0) {
-    IPAddress gw = WiFi.gatewayIP();
-    IPAddress sn = WiFi.subnetMask();
-    IPAddress desired = ipFromString(g_cfg.bind_ip);
-    if (desired != IPAddress(0,0,0,0)) {
-      Serial.print("Applying static IP: "); Serial.println(desired);
-      WiFi.disconnect(true);
-      delay(500);
-      bool okcfg = WiFi.config(desired, gw, sn);
-      (void)okcfg;
-      WiFi.begin(g_cfg.ssid, g_cfg.pass);
-      uint32_t t2 = millis();
-      while (WiFi.status() != WL_CONNECTED && millis() - t2 < 10000) {
-        delay(200);
-      }
-      if (WiFi.status() == WL_CONNECTED) {
-        Serial.print("Connected with static IP: "); Serial.println(WiFi.localIP());
-      } else {
-        Serial.println("Static IP config failed, continuing with DHCP");
-      }
-    }
-  }
-
   // init UDP with configured port (fallback to default)
-  uint16_t listenPort = (g_cfg.port != 0) ? g_cfg.port : F1_UDP_PORT;
-  if (!udp_init(listenPort)) {
+  g_listenPort = (g_cfg.port != 0) ? g_cfg.port : F1_UDP_PORT;
+  if (!udp_init(g_listenPort)) {
     Serial.println("UDP init failed");
   } else {
-    Serial.printf("Listening UDP port %d\n", listenPort);
+    Serial.printf("Listening UDP port %d\n", g_listenPort);
   }
 
   // register status endpoint and start webserver in STA mode
@@ -224,56 +228,81 @@ void setup() {
 
   // init display and dashboard
   dashboard_init(&tft);
+  String ip = WiFi.localIP().toString();
+  dashboard_showNetworkInfo(ip.c_str(), g_listenPort, true);
+  g_networkInfoVisible = true;
 
 }
 
 void loop() {
-  // handle web server clients (status endpoint) in STA mode
-  server.handleClient();
+  // handle web server clients (rate-limited to reduce loop overhead)
+  static uint32_t lastWeb = 0;
+  if (millis() - lastWeb >= 200) {
+    server.handleClient();
+    lastWeb = millis();
+  }
 
-  // read UDP packet
-  size_t len = udp_read_packet(packetBuf, sizeof(packetBuf));
-  if (len > 0) {
-    TelemetryFrame frame;
-    // keep previous values if parse only partial
-    frame = stateMgr.current();
+  // Drain all available UDP packets to avoid buffer overflow.
+  // The F1 game sends many packet types per frame; reading only one
+  // per loop() causes the LWIP queue to overflow and drop data.
+  for (int pktCount = 0; pktCount < 20; ++pktCount) {
+    size_t len = udp_read_packet(packetBuf, sizeof(packetBuf));
+    if (len == 0) break;
+    g_lastPacketMs = millis();
+
+    // ── Debug: log packet metadata (rate-limited) ──
+    static uint32_t lastDbg = 0;
+    if (millis() - lastDbg >= 1000) {
+      uint8_t pktId = (len > 6) ? packetBuf[6] : 0xFF; // F1 23+ packetId at offset 6
+      Serial.printf("[UDP] len=%u  pktId=%u  first8=", (unsigned)len, (unsigned)pktId);
+      for (size_t i = 0; i < 8 && i < len; ++i) Serial.printf("%02X ", packetBuf[i]);
+      Serial.println();
+      lastDbg = millis();
+    }
+
+    TelemetryFrame frame = stateMgr.current();
     telemetry_parse(packetBuf, len, frame);
     stateMgr.updateFrame(frame);
   }
 
-  // Pretty-print received telemetry to Serial (rate-limited)
+  uint32_t now = millis();
+  bool hasEverReceived = (g_lastPacketMs != 0);
+  bool showNetworkInfo = (!hasEverReceived) || ((now - g_lastPacketMs) >= 10000);
+  if (showNetworkInfo && !g_networkInfoVisible) {
+    String ip = WiFi.localIP().toString();
+    dashboard_showNetworkInfo(ip.c_str(), g_listenPort, !hasEverReceived);
+    g_networkInfoVisible = true;
+  } else if (!showNetworkInfo && g_networkInfoVisible) {
+    dashboard_hideNetworkInfo();
+    g_networkInfoVisible = false;
+  }
+
+  // Pretty-print received telemetry to Serial (rate-limited, only when data received)
   static uint32_t lastSerial = 0;
-  uint32_t nowSerial = millis();
-  if (nowSerial - lastSerial >= 200) { // at most 5 prints/sec
+  if (g_lastPacketMs != 0 && now - lastSerial >= 500) {
     const TelemetryFrame &f = stateMgr.current();
-    Serial.println("---------------- Telemetry Frame ----------------");
-    Serial.printf("Frame ID: %lu\n", (unsigned long)f.frameIdentifier);
-    Serial.printf("Speed: %u km/h   RPM: %u   Gear: %d   DRS: %s\n",
+    Serial.println("---- Telemetry ----");
+    Serial.printf("Frame: %lu  Speed: %u km/h  RPM: %u  Gear: %d  DRS: %s\n",
+                  (unsigned long)f.frameIdentifier,
                   (unsigned int)f.telemetry.speedKmh,
                   (unsigned int)f.telemetry.rpm,
                   (int)f.telemetry.gear,
                   f.telemetry.drsActive ? "ON" : "OFF");
-    Serial.printf("Throttle: %u   Brake: %u   MFD: %u\n",
+    Serial.printf("Thr: %u  Brk: %u  Fuel: %.1fL  ERS: %u  Pos: %u\n",
                   (unsigned int)f.telemetry.throttle,
                   (unsigned int)f.telemetry.brake,
-                  (unsigned int)f.telemetry.mfdPanelIndex);
-    Serial.printf("ERS: %u (mode %u)   Fuel: %.1f L   BrakeBias: %u\n",
-                  (unsigned int)f.status.ersEnergy,
-                  (unsigned int)f.status.ersDeployMode,
                   f.status.fuel,
-                  (unsigned int)f.status.brakeBias);
-    Serial.printf("Lap: last=%.3f s   Pos: %u   PitStatus: %u\n",
-                  f.lap.lastLapTime,
-                  (unsigned int)f.lap.position,
-                  (unsigned int)f.lap.pitStatus);
-    lastSerial = nowSerial;
+                  (unsigned int)f.status.ersEnergy,
+                  (unsigned int)f.lap.position);
+    lastSerial = now;
   }
 
-  // update dashboard at ~25 FPS
+  // update dashboard at ~12 FPS (SPI display is slow; faster rate starves UDP)
   static uint32_t lastRender = 0;
-  uint32_t now = millis();
-  if (now - lastRender >= 40) {
-    dashboard_update(stateMgr);
+  if (now - lastRender >= 80) {
+    if (!g_networkInfoVisible) {
+      dashboard_update(stateMgr);
+    }
     lastRender = now;
   }
 }

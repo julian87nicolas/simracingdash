@@ -6,14 +6,25 @@
 // Since we don't parse tyre-specific fields yet, show placeholders from status.
 
 void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
+  static bool bgDrawn = false;
   tft->setTextSize(2);
   tft->setTextColor(TFT_WHITE, TFT_BLACK);
+
+  if (!bgDrawn) {
+    tft->fillScreen(TFT_BLACK);
+    tft->setTextColor(TFT_GREEN, TFT_BLACK);
+    tft->setCursor(20, 10);
+    tft->print("TYRES");
+    tft->setTextColor(TFT_WHITE, TFT_BLACK);
+  }
+
   const int cx[4] = {60, 360, 60, 360};
   const int cy[4] = {40, 40, 220, 220};
   const char* labels[4] = {"FL","FR","RL","RR"};
   for (int i=0;i<4;i++) {
     int x = cx[i], y = cy[i];
     tft->drawRect(x-50, y-30, 100, 60, TFT_WHITE);
+    tft->fillRect(x-48, y-28, 96, 56, TFT_BLACK);
     tft->setCursor(x-20, y-10);
     tft->printf("%s", labels[i]);
     // Placeholder temperature & wear using ersEnergy & brakeBias
@@ -22,4 +33,6 @@ void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setCursor(x-40, y+8);
     tft->printf("T:%3dC W:%3d%%", temp, wear);
   }
+
+  bgDrawn = true;
 }
