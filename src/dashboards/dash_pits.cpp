@@ -27,36 +27,70 @@ void drawPitsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(TFT_MAGENTA, TFT_BLACK);
-    tft->drawString("PIT LANE", 20, 8);
-    tft->drawFastHLine(20, 35, 440, 0x4208);
+    tft->drawString("PIT LANE", 20, 4);
+    tft->drawFastHLine(20, 28, 440, 0x4208);
 
-    // Labels
+    // Gear / Speed labels
     tft->setTextFont(2); tft->setTextSize(1);
     tft->setTextColor(0x6B4D, TFT_BLACK);
-    tft->drawString("PIT STATUS", 20, 48);
-    tft->drawString("POSITION", 260, 48);
-    tft->drawString("SPEED", 20, 118);
-    tft->drawString("GEAR", 260, 118);
-    tft->drawString("LAST LAP", 20, 188);
-    tft->drawString("FUEL", 260, 188);
+    tft->drawString("GEAR", 40, 32);
+    tft->drawString("SPEED", 340, 32);
+
+    tft->drawFastHLine(20, 82, 440, 0x4208);
+
+    // Section labels
+    tft->drawString("PIT STATUS", 20, 88);
+    tft->drawString("POSITION", 260, 88);
+    tft->drawString("LAST LAP", 20, 168);
+    tft->drawString("FUEL", 260, 168);
     bgDrawn = true;
   }
 
-  // Pit status badge
+  // ── Gear + Speed (prominent) ──
+  int8_t gear = frame.telemetry.gear;
+  if (gear != prevGear) {
+    char gtxt[4];
+    if (gear == 0) strcpy(gtxt, "N");
+    else if (gear == -1) strcpy(gtxt, "R");
+    else snprintf(gtxt, sizeof(gtxt), "%d", gear);
+    uint16_t gc = (gear == 0) ? TFT_GREEN : (gear == -1) ? TFT_RED : TFT_WHITE;
+    tft->setTextColor(gc, TFT_BLACK);
+    tft->setTextFont(7); tft->setTextSize(1);
+    tft->setTextDatum(MC_DATUM);
+    tft->fillRect(20, 44, 110, 36, TFT_BLACK);
+    tft->drawString(gtxt, 75, 62);
+  }
+
+  uint16_t speed = frame.telemetry.speedKmh;
+  if (speed != prevSpeed) {
+    char sbuf[8];
+    snprintf(sbuf, sizeof(sbuf), "%3u", (unsigned)speed);
+    tft->setTextColor(TFT_WHITE, TFT_BLACK);
+    tft->setTextFont(7); tft->setTextSize(1);
+    tft->setTextDatum(MR_DATUM);
+    tft->fillRect(270, 44, 150, 36, TFT_BLACK);
+    tft->drawString(sbuf, 415, 62);
+    tft->setTextFont(2); tft->setTextSize(1);
+    tft->setTextColor(0x6B4D, TFT_BLACK);
+    tft->setTextDatum(ML_DATUM);
+    tft->drawString("km/h", 420, 58);
+  }
+
+  // ── Pit status badge ──
   uint8_t pitSt = frame.lap.pitStatus;
   if (pitSt != prevPitSt) {
     const char* labels[] = {"ON TRACK", "PITTING", "IN PIT"};
     const uint16_t cols[] = {TFT_GREEN, TFT_YELLOW, TFT_RED};
     uint8_t si = (pitSt <= 2) ? pitSt : 0;
-    tft->fillRect(20, 65, 220, 36, TFT_BLACK);
-    tft->fillRoundRect(20, 65, 12 + strlen(labels[si]) * 14, 32, 6, cols[si]);
+    tft->fillRect(20, 104, 220, 36, TFT_BLACK);
+    tft->fillRoundRect(20, 104, 12 + strlen(labels[si]) * 14, 32, 6, cols[si]);
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(ML_DATUM);
     tft->setTextColor(TFT_BLACK, cols[si]);
-    tft->drawString(labels[si], 28, 81);
+    tft->drawString(labels[si], 28, 120);
   }
 
-  // Position
+  // ── Position ──
   uint8_t pos = frame.lap.position;
   if (pos != prevPos) {
     char buf[8];
@@ -64,37 +98,11 @@ void drawPitsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextFont(6); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft->fillRect(260, 65, 180, 45, TFT_BLACK);
-    tft->drawString(buf, 260, 65);
+    tft->fillRect(260, 104, 180, 45, TFT_BLACK);
+    tft->drawString(buf, 260, 104);
   }
 
-  // Speed
-  uint16_t speed = frame.telemetry.speedKmh;
-  if (speed != prevSpeed) {
-    char buf[12];
-    snprintf(buf, sizeof(buf), "%u km/h", (unsigned)speed);
-    tft->setTextFont(4); tft->setTextSize(1);
-    tft->setTextDatum(TL_DATUM);
-    tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    tft->fillRect(20, 136, 220, 30, TFT_BLACK);
-    tft->drawString(buf, 20, 138);
-  }
-
-  // Gear
-  int8_t gear = frame.telemetry.gear;
-  if (gear != prevGear) {
-    char gtxt[4];
-    if (gear == 0) strcpy(gtxt, "N");
-    else if (gear == -1) strcpy(gtxt, "R");
-    else snprintf(gtxt, sizeof(gtxt), "%d", gear);
-    tft->setTextFont(6); tft->setTextSize(1);
-    tft->setTextDatum(TL_DATUM);
-    tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    tft->fillRect(260, 130, 80, 45, TFT_BLACK);
-    tft->drawString(gtxt, 260, 130);
-  }
-
-  // Last lap
+  // ── Last lap ──
   float lapT = frame.lap.lastLapTime;
   if (lapT != prevLap) {
     int mins = (int)(lapT / 60.0f);
@@ -107,11 +115,11 @@ void drawPitsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    tft->fillRect(20, 206, 220, 30, TFT_BLACK);
-    tft->drawString(buf, 20, 208);
+    tft->fillRect(20, 186, 220, 30, TFT_BLACK);
+    tft->drawString(buf, 20, 188);
   }
 
-  // Fuel
+  // ── Fuel ──
   int fuel10 = (int)(frame.status.fuel * 10);
   if (fuel10 != prevFuel10) {
     char buf[12];
@@ -119,8 +127,8 @@ void drawPitsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(TFT_CYAN, TFT_BLACK);
-    tft->fillRect(260, 206, 180, 30, TFT_BLACK);
-    tft->drawString(buf, 260, 208);
+    tft->fillRect(260, 186, 180, 30, TFT_BLACK);
+    tft->drawString(buf, 260, 188);
   }
 
   prevPitSt = pitSt; prevPos = pos; prevLap = lapT;
