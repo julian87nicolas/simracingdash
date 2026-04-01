@@ -2,8 +2,9 @@
 #pragma once
 #include <cstdint>
 #include <cstdio>
+#include <cstdarg>
 
-enum textdatum_t { MC_DATUM };
+enum textdatum_t { TL_DATUM, TC_DATUM, TR_DATUM, ML_DATUM, MC_DATUM, MR_DATUM, BL_DATUM, BC_DATUM, BR_DATUM };
 
 // Color constants used by dashboards (16-bit RGB565 values)
 #define TFT_BLACK    0x0000
@@ -11,6 +12,8 @@ enum textdatum_t { MC_DATUM };
 #define TFT_RED      0xF800
 #define TFT_GREEN    0x07E0
 #define TFT_BLUE     0x001F
+#define TFT_CYAN     0x07FF
+#define TFT_MAGENTA  0xF81F
 #define TFT_YELLOW   0xFFE0
 #define TFT_ORANGE   0xFC00
 #define TFT_DARKGREY 0x5294
@@ -26,7 +29,11 @@ public:
   void setTextColor(uint32_t, uint32_t=0) { call_count++; }
   void setCursor(int, int) { call_count++; }
   void fillRect(int, int, int, int, uint32_t) { call_count++; }
+  void fillRoundRect(int, int, int, int, int, uint32_t) { call_count++; }
   void drawRect(int, int, int, int, uint32_t) { call_count++; }
+  void drawRoundRect(int, int, int, int, int, uint32_t) { call_count++; }
+  void drawFastHLine(int, int, int, uint32_t) { call_count++; }
+  void drawFastVLine(int, int, int, uint32_t) { call_count++; }
   void setTextDatum(textdatum_t) { call_count++; }
   void drawString(const char* s, int, int) { call_count++; }
   void printf(const char* fmt, ...) { call_count++; }
