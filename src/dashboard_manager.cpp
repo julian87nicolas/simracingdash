@@ -7,15 +7,17 @@
 
 // Forward declarations for dashboard draw functions
 void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
-void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
-void drawERSDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
-void drawDamageDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
+void drawSetupDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
 void drawPitsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
+void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
+void drawTempsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
+void drawEngineDashboard(TFT_eSPI* tft, const TelemetryFrame &frame);
 void resetMainDashboardCache();
-void resetTyresDashboardCache();
-void resetERSDashboardCache();
-void resetDamageDashboardCache();
+void resetSetupDashboardCache();
 void resetPitsDashboardCache();
+void resetTyresDashboardCache();
+void resetTempsDashboardCache();
+void resetEngineDashboardCache();
 
 static TFT_eSPI* g_tft = nullptr;
 static DashboardScreen currentScreen = DashboardScreen::MAIN;
@@ -29,49 +31,52 @@ static uint8_t g_stableMfd = 255;
 static uint32_t g_mfdChangeMs = 0;
 static const uint32_t MFD_DEBOUNCE_MS = 200;
 
+// MFD index → screen mapping (matches F1 game MFD order)
 static DashboardScreen mapMfdToScreen(uint8_t mfd) {
   switch (mfd) {
-    case 0: return DashboardScreen::MAIN;    // car setup → main dash
-    case 1: return DashboardScreen::PITS;    // pits
-    case 2: return DashboardScreen::DAMAGE;  // damage
-    case 3: return DashboardScreen::ERS;     // engine/ERS
-    case 4: return DashboardScreen::TYRES;   // temperatures
+    case 0: return DashboardScreen::SETUP;   // brake/diff/ERS config
+    case 1: return DashboardScreen::PITS;    // pit stop config
+    case 2: return DashboardScreen::TYRES;   // tyre wear status
+    case 3: return DashboardScreen::TEMPS;   // temperatures
+    case 4: return DashboardScreen::ENGINE;  // engine component wear
     default: return DashboardScreen::MAIN;
   }
 }
 
 static void resetAllDashboardCaches() {
   resetMainDashboardCache();
-  resetTyresDashboardCache();
-  resetERSDashboardCache();
-  resetDamageDashboardCache();
+  resetSetupDashboardCache();
   resetPitsDashboardCache();
+  resetTyresDashboardCache();
+  resetTempsDashboardCache();
+  resetEngineDashboardCache();
 }
 
-// Screen indicator labels drawn at the bottom of every dashboard
 static const char* screenLabel(DashboardScreen s) {
   switch (s) {
     case DashboardScreen::MAIN:   return "RACE";
-    case DashboardScreen::TYRES:  return "TYRES";
-    case DashboardScreen::ERS:    return "ERS";
-    case DashboardScreen::DAMAGE: return "DMG";
+    case DashboardScreen::SETUP:  return "SETUP";
     case DashboardScreen::PITS:   return "PITS";
+    case DashboardScreen::TYRES:  return "TYRES";
+    case DashboardScreen::TEMPS:  return "TEMPS";
+    case DashboardScreen::ENGINE: return "MOTOR";
   }
   return "?";
 }
 
 static void drawScreenTab(TFT_eSPI* tft, DashboardScreen active) {
   const DashboardScreen tabs[] = {
-    DashboardScreen::MAIN, DashboardScreen::ERS,
-    DashboardScreen::TYRES, DashboardScreen::DAMAGE, DashboardScreen::PITS
+    DashboardScreen::MAIN,  DashboardScreen::SETUP,
+    DashboardScreen::PITS,  DashboardScreen::TYRES,
+    DashboardScreen::TEMPS, DashboardScreen::ENGINE
   };
-  const int N = 5;
-  const int tabW = 480 / N;
+  const int N = 6;
+  const int tabW = 480 / N; // 80px each
   const int tabY = 300;
   const int tabH = 20;
   for (int i = 0; i < N; ++i) {
     bool sel = (tabs[i] == active);
-    uint16_t bg = sel ? TFT_WHITE : 0x2104; // dark grey
+    uint16_t bg = sel ? TFT_WHITE : 0x2104;
     uint16_t fg = sel ? TFT_BLACK : TFT_DARKGREY;
     tft->fillRect(i * tabW, tabY, tabW, tabH, bg);
     tft->setTextDatum(MC_DATUM);
@@ -176,9 +181,10 @@ void dashboard_update(const StateManager &state) {
   const TelemetryFrame &f = state.current();
   switch (currentScreen) {
     case DashboardScreen::MAIN:   drawMainDashboard(g_tft, f);   break;
-    case DashboardScreen::TYRES:  drawTyresDashboard(g_tft, f);  break;
-    case DashboardScreen::ERS:    drawERSDashboard(g_tft, f);    break;
-    case DashboardScreen::DAMAGE: drawDamageDashboard(g_tft, f); break;
+    case DashboardScreen::SETUP:  drawSetupDashboard(g_tft, f);  break;
     case DashboardScreen::PITS:   drawPitsDashboard(g_tft, f);   break;
+    case DashboardScreen::TYRES:  drawTyresDashboard(g_tft, f);  break;
+    case DashboardScreen::TEMPS:  drawTempsDashboard(g_tft, f);  break;
+    case DashboardScreen::ENGINE: drawEngineDashboard(g_tft, f); break;
   }
 }

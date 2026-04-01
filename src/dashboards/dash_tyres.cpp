@@ -3,58 +3,47 @@
 #include <Arduino.h>
 
 // ═══════════════════════════════════════════════════════════════════
-// TYRES DASHBOARD
-// Shows 4 tyre boxes arranged as a car viewed from above.
-// Note: we don't yet parse individual tyre temps/wear from
-// CarTelemetryData; for now we show placeholder data from the
-// available fields. The layout is ready for when specific tyre
-// data is added to the parser.
+// TYRE WEAR DASHBOARD — MFD 2
+// 4 tyre boxes with actual wear data from CarDamage packet
 // ═══════════════════════════════════════════════════════════════════
 
 static bool bgDrawn = false;
-static int prevErs = -1;
-static uint8_t prevBias = 0xFF;
 static int8_t prevGear = 127;
 static uint16_t prevSpeed = 0xFFFF;
+static uint8_t prevWear[4] = {0xFF,0xFF,0xFF,0xFF};
+static uint8_t prevCompound = 0xFF;
+static uint8_t prevAge = 0xFF;
 
 void resetTyresDashboardCache() {
   bgDrawn = false;
-  prevErs = -1; prevBias = 0xFF;
   prevGear = 127; prevSpeed = 0xFFFF;
+  memset(prevWear, 0xFF, 4);
+  prevCompound = 0xFF; prevAge = 0xFF;
 }
 
 static void drawTyreBox(TFT_eSPI* tft, int cx, int cy,
-                        const char* label, int temp, int wear) {
+                        const char* label, uint8_t wear) {
   const int bw = 110, bh = 70;
   int x = cx - bw / 2, y = cy - bh / 2;
 
-  uint16_t tempCol;
-  if      (temp < 80)  tempCol = TFT_BLUE;
-  else if (temp < 100) tempCol = TFT_GREEN;
-  else if (temp < 110) tempCol = TFT_YELLOW;
-  else                 tempCol = TFT_RED;
+  uint16_t wearCol = (wear < 30) ? TFT_GREEN : (wear < 60) ? TFT_YELLOW : TFT_RED;
 
   tft->drawRect(x, y, bw, bh, 0x6B4D);
-  tft->fillRect(x + 1, y + 1, bw - 2, 6, tempCol);
+  tft->fillRect(x + 1, y + 1, bw - 2, 6, wearCol);
   tft->fillRect(x + 1, y + 7, bw - 2, bh - 8, TFT_BLACK);
 
+  // Label
   tft->setTextFont(4); tft->setTextSize(1);
   tft->setTextDatum(MC_DATUM);
   tft->setTextColor(TFT_WHITE, TFT_BLACK);
-  tft->drawString(label, cx, cy - 10);
+  tft->drawString(label, cx, cy - 12);
 
-  char tbuf[10];
-  snprintf(tbuf, sizeof(tbuf), "%dC", temp);
-  tft->setTextFont(2); tft->setTextSize(1);
-  tft->setTextColor(tempCol, TFT_BLACK);
-  tft->drawString(tbuf, cx, cy + 10);
-
-  int barY = y + bh - 12;
-  int barW = bw - 8;
-  tft->fillRect(x + 4, barY, barW, 8, 0x2104);
-  int fillW = (int)((long)wear * barW / 100);
-  uint16_t wearCol = (wear > 60) ? TFT_GREEN : (wear > 30) ? TFT_YELLOW : TFT_RED;
-  if (fillW > 0) tft->fillRect(x + 4, barY, fillW, 8, wearCol);
+  // Wear %
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%u%%", (unsigned)wear);
+  tft->setTextFont(4); tft->setTextSize(1);
+  tft->setTextColor(wearCol, TFT_BLACK);
+  tft->drawString(buf, cx, cy + 14);
 }
 
 void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
@@ -65,7 +54,7 @@ void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->drawString("TYRES", 20, 4);
     tft->drawFastHLine(20, 28, 440, 0x4208);
 
-    // Car body outline (center area between tyres)
+    // Car body outline
     tft->drawRect(170, 50, 140, 220, 0x4208);
 
     // Labels inside car outline
@@ -74,11 +63,12 @@ void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextDatum(MC_DATUM);
     tft->drawString("GEAR", 210, 72);
     tft->drawString("SPEED", 270, 72);
-
+    tft->drawString("COMPOUND", 215, 170);
+    tft->drawString("AGE", 265, 170);
     bgDrawn = true;
   }
 
-  // ── Gear + Speed inside car outline (central) ──
+  // ── Gear + Speed inside car outline ──
   int8_t gear = frame.telemetry.gear;
   if (gear != prevGear) {
     char gtxt[4];
@@ -92,7 +82,6 @@ void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->fillRect(180, 80, 60, 50, TFT_BLACK);
     tft->drawString(gtxt, 210, 105);
   }
-
   uint16_t speed = frame.telemetry.speedKmh;
   if (speed != prevSpeed) {
     char sbuf[8];
@@ -107,19 +96,41 @@ void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->drawString("km/h", 240, 135);
   }
 
-  // Placeholder temperatures & wear
-  int temp = map((int)frame.status.ersEnergy, 0, 1000, 60, 120);
-  int wear = min(100, (int)frame.status.brakeBias);
-
-  int ers = (int)frame.status.ersEnergy;
-  uint8_t bias = frame.status.brakeBias;
-  if (ers != prevErs || bias != prevBias) {
-    drawTyreBox(tft,  80,  95, "FL", temp, wear);
-    drawTyreBox(tft, 400,  95, "FR", temp, wear);
-    drawTyreBox(tft,  80, 225, "RL", temp, wear);
-    drawTyreBox(tft, 400, 225, "RR", temp, wear);
+  // ── Compound + Age in car center ──
+  uint8_t compound = frame.status.tyreCompound;
+  if (compound != prevCompound) {
+    const char* names[] = {"S","M","H","I","W","?"};
+    const uint16_t cols[] = {TFT_RED,TFT_YELLOW,TFT_WHITE,TFT_GREEN,TFT_BLUE,TFT_DARKGREY};
+    int ci = (compound==16)?0:(compound==17)?1:(compound==18)?2:(compound==7)?3:(compound==8)?4:5;
+    tft->fillRect(185, 182, 50, 30, TFT_BLACK);
+    tft->setTextFont(4); tft->setTextSize(1);
+    tft->setTextDatum(MC_DATUM);
+    tft->setTextColor(cols[ci], TFT_BLACK);
+    tft->drawString(names[ci], 215, 197);
+  }
+  uint8_t age = frame.status.tyresAgeLaps;
+  if (age != prevAge) {
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%uL", (unsigned)age);
+    tft->fillRect(245, 182, 50, 30, TFT_BLACK);
+    tft->setTextFont(4); tft->setTextSize(1);
+    tft->setTextDatum(MC_DATUM);
+    tft->setTextColor(TFT_WHITE, TFT_BLACK);
+    tft->drawString(buf, 265, 197);
   }
 
-  prevErs = ers; prevBias = bias;
+  // ── 4 tyre boxes with actual wear ──
+  const char* names[] = {"FL", "FR", "RL", "RR"};
+  const int cx[] = {80, 400, 80, 400};
+  const int cy[] = {95, 95, 225, 225};
+  for (int i = 0; i < 4; ++i) {
+    uint8_t w = frame.damage.tyresWear[i];
+    if (w != prevWear[i]) {
+      drawTyreBox(tft, cx[i], cy[i], names[i], w);
+      prevWear[i] = w;
+    }
+  }
+
   prevGear = gear; prevSpeed = speed;
+  prevCompound = compound; prevAge = age;
 }

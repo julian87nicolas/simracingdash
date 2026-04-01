@@ -100,16 +100,37 @@ void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
     //   +15 int8   gear
     //   +16 uint16 engineRPM
     //   +18 uint8  drs
+    //   +22 uint16[4] brakesTemperature  (RL,RR,FL,FR)
+    //   +30 uint8[4]  tyresSurfaceTemp   (RL,RR,FL,FR)
+    //   +34 uint8[4]  tyresInnerTemp     (RL,RR,FL,FR)
+    //   +38 uint16    engineTemperature
     case F1Packets::PACKET_ID_CAR_TELEMETRY: {
       const size_t CS = 60;
       size_t base = hdrSize + (size_t)pci * CS;
-      if (base + 19 > len) break;
+      if (base + 40 > len) break;
       out.telemetry.speedKmh = rd16(buf, len, base);
       out.telemetry.throttle = fto8(rdF(buf, len, base + 2));
       out.telemetry.brake    = fto8(rdF(buf, len, base + 10));
       out.telemetry.gear     = (int8_t)rd8(buf, len, base + 15);
       out.telemetry.rpm      = rd16(buf, len, base + 16);
       out.telemetry.drsActive = (rd8(buf, len, base + 18) != 0);
+      // Brake temps: packet order RL,RR,FL,FR → store as FL,FR,RL,RR
+      out.telemetry.brakesTemp[0] = rd16(buf, len, base + 22 + 4); // FL
+      out.telemetry.brakesTemp[1] = rd16(buf, len, base + 22 + 6); // FR
+      out.telemetry.brakesTemp[2] = rd16(buf, len, base + 22);     // RL
+      out.telemetry.brakesTemp[3] = rd16(buf, len, base + 22 + 2); // RR
+      // Tyre surface temps: RL,RR,FL,FR → FL,FR,RL,RR
+      out.telemetry.tyresSurfaceTemp[0] = rd8(buf, len, base + 30 + 2); // FL
+      out.telemetry.tyresSurfaceTemp[1] = rd8(buf, len, base + 30 + 3); // FR
+      out.telemetry.tyresSurfaceTemp[2] = rd8(buf, len, base + 30);     // RL
+      out.telemetry.tyresSurfaceTemp[3] = rd8(buf, len, base + 30 + 1); // RR
+      // Tyre inner temps
+      out.telemetry.tyresInnerTemp[0] = rd8(buf, len, base + 34 + 2); // FL
+      out.telemetry.tyresInnerTemp[1] = rd8(buf, len, base + 34 + 3); // FR
+      out.telemetry.tyresInnerTemp[2] = rd8(buf, len, base + 34);     // RL
+      out.telemetry.tyresInnerTemp[3] = rd8(buf, len, base + 34 + 1); // RR
+      // Engine temp
+      out.telemetry.engineTemp = rd16(buf, len, base + 38);
       // mfdPanelIndex after all 22 cars
       size_t mfdOff = hdrSize + 22 * CS;
       if (mfdOff < len) out.telemetry.mfdPanelIndex = rd8(buf, len, mfdOff);
@@ -119,14 +140,21 @@ void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
     // Per-car: F1 22 = 47 bytes, F1 23+ = 55 bytes
     //   +3  uint8  frontBrakeBias
     //   +5  float  fuelInTank
+    //   +13 float  fuelRemainingLaps
+    //   +25 uint8  actualTyreCompound
+    //   +26 uint8  visualTyreCompound
+    //   +27 uint8  tyresAgeLaps
     //   ERS store energy: F1 22 at +29, F1 23+ at +37 (float, joules, max ~4MJ)
     //   ERS deploy mode:  F1 22 at +33, F1 23+ at +41
     case F1Packets::PACKET_ID_CAR_STATUS: {
       size_t CS  = (fmt >= 2023) ? 55 : 47;
       size_t base = hdrSize + (size_t)pci * CS;
-      if (base + 10 > len) break;
+      if (base + 28 > len) break;
       out.status.brakeBias = rd8(buf, len, base + 3);
       out.status.fuel      = rdF(buf, len, base + 5);
+      out.status.fuelLaps  = rdF(buf, len, base + 13);
+      out.status.tyreCompound = rd8(buf, len, base + 26); // visual compound
+      out.status.tyresAgeLaps = rd8(buf, len, base + 27);
       size_t ersOff = (fmt >= 2023) ? 37 : 29;
       if (base + ersOff + 5 > len) break;
       float ersJ = rdF(buf, len, base + ersOff);
@@ -150,6 +178,37 @@ void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
       out.lap.lastLapTime = (float)ms / 1000.0f;
       out.lap.position    = rd8(buf, len, base + posOff);
       out.lap.pitStatus   = rd8(buf, len, base + pitOff);
+    } break;
+
+    // ── Car Damage (packet 10) ──
+    // Per-car: 52 bytes (same F1 22-25)
+    //   +0  float[4]  tyresWear (RL,RR,FL,FR) — 0-100%
+    //   +46 uint8 engineMGUHWear
+    //   +47 uint8 engineESWear
+    //   +48 uint8 engineCEWear
+    //   +49 uint8 engineICEWear
+    //   +50 uint8 engineMGUKWear
+    //   +51 uint8 engineTCWear
+    case F1Packets::PACKET_ID_CAR_DAMAGE: {
+      const size_t CS = 52;
+      size_t base = hdrSize + (size_t)pci * CS;
+      if (base + 52 > len) break;
+      // Tyre wear: packet RL,RR,FL,FR → store FL,FR,RL,RR
+      float wFL = rdF(buf, len, base + 8);  // index 2 = FL
+      float wFR = rdF(buf, len, base + 12); // index 3 = FR
+      float wRL = rdF(buf, len, base + 0);  // index 0 = RL
+      float wRR = rdF(buf, len, base + 4);  // index 1 = RR
+      out.damage.tyresWear[0] = (uint8_t)(wFL < 0 ? 0 : (wFL > 100 ? 100 : wFL));
+      out.damage.tyresWear[1] = (uint8_t)(wFR < 0 ? 0 : (wFR > 100 ? 100 : wFR));
+      out.damage.tyresWear[2] = (uint8_t)(wRL < 0 ? 0 : (wRL > 100 ? 100 : wRL));
+      out.damage.tyresWear[3] = (uint8_t)(wRR < 0 ? 0 : (wRR > 100 ? 100 : wRR));
+      // Engine component wear
+      out.damage.engineMGUHWear = rd8(buf, len, base + 46);
+      out.damage.engineESWear   = rd8(buf, len, base + 47);
+      out.damage.engineCEWear   = rd8(buf, len, base + 48);
+      out.damage.engineICEWear  = rd8(buf, len, base + 49);
+      out.damage.engineMGUKWear = rd8(buf, len, base + 50);
+      out.damage.engineTCWear   = rd8(buf, len, base + 51);
     } break;
 
     default: break;
