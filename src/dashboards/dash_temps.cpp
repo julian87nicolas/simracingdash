@@ -10,16 +10,16 @@
 static bool bgDrawn = false;
 static int8_t prevGear = 127;
 static uint16_t prevSpeed = 0xFFFF;
-static uint8_t prevSurf[4] = {0,0,0,0};
-static uint8_t prevInner[4] = {0,0,0,0};
-static uint16_t prevBrake[4] = {0,0,0,0};
+static uint8_t prevSurf[4] = {0xFF,0xFF,0xFF,0xFF};
+static uint8_t prevInner[4] = {0xFF,0xFF,0xFF,0xFF};
+static uint16_t prevBrake[4] = {0xFFFF,0xFFFF,0xFFFF,0xFFFF};
 static uint16_t prevEngine = 0xFFFF;
 
 void resetTempsDashboardCache() {
   bgDrawn = false;
   prevGear = 127; prevSpeed = 0xFFFF;
-  memset(prevSurf, 0, 4); memset(prevInner, 0, 4);
-  memset(prevBrake, 0, 8); prevEngine = 0xFFFF;
+  memset(prevSurf, 0xFF, sizeof(prevSurf)); memset(prevInner, 0xFF, sizeof(prevInner));
+  memset(prevBrake, 0xFF, sizeof(prevBrake)); prevEngine = 0xFFFF;
 }
 
 // Color from temperature value
