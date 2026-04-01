@@ -235,74 +235,71 @@ void setup() {
 }
 
 void loop() {
-  // handle web server clients (rate-limited to reduce loop overhead)
-  static uint32_t lastWeb = 0;
-  if (millis() - lastWeb >= 200) {
-    server.handleClient();
-    lastWeb = millis();
-  }
-
-  // Drain all available UDP packets to avoid buffer overflow.
-  // The F1 game sends many packet types per frame; reading only one
-  // per loop() causes the LWIP queue to overflow and drop data.
-  for (int pktCount = 0; pktCount < 20; ++pktCount) {
+  // ═══════════════════════════════════════════════════════════════════
+  // PRIORITY 1 — Drain ALL queued UDP packets (lowest latency path)
+  // ═══════════════════════════════════════════════════════════════════
+  // Parse into a single accumulator frame so we only keep the freshest
+  // data and do a single state update after draining.
+  bool gotNewData = false;
+  TelemetryFrame frame = stateMgr.current();
+  for (;;) {
     size_t len = udp_read_packet(packetBuf, sizeof(packetBuf));
     if (len == 0) break;
     g_lastPacketMs = millis();
-
-    // ── Debug: log packet metadata (rate-limited) ──
-    static uint32_t lastDbg = 0;
-    if (millis() - lastDbg >= 1000) {
-      uint8_t pktId = (len > 6) ? packetBuf[6] : 0xFF; // F1 23+ packetId at offset 6
-      Serial.printf("[UDP] len=%u  pktId=%u  first8=", (unsigned)len, (unsigned)pktId);
-      for (size_t i = 0; i < 8 && i < len; ++i) Serial.printf("%02X ", packetBuf[i]);
-      Serial.println();
-      lastDbg = millis();
-    }
-
-    TelemetryFrame frame = stateMgr.current();
+    gotNewData = true;
     telemetry_parse(packetBuf, len, frame);
+  }
+  if (gotNewData) {
     stateMgr.updateFrame(frame);
   }
 
   uint32_t now = millis();
-  bool hasEverReceived = (g_lastPacketMs != 0);
-  bool showNetworkInfo = (!hasEverReceived) || ((now - g_lastPacketMs) >= 10000);
-  if (showNetworkInfo && !g_networkInfoVisible) {
-    String ip = WiFi.localIP().toString();
-    dashboard_showNetworkInfo(ip.c_str(), g_listenPort, !hasEverReceived);
-    g_networkInfoVisible = true;
-  } else if (!showNetworkInfo && g_networkInfoVisible) {
-    dashboard_hideNetworkInfo();
-    g_networkInfoVisible = false;
-  }
 
-  // Pretty-print received telemetry to Serial (rate-limited, only when data received)
-  static uint32_t lastSerial = 0;
-  if (g_lastPacketMs != 0 && now - lastSerial >= 500) {
-    const TelemetryFrame &f = stateMgr.current();
-    Serial.println("---- Telemetry ----");
-    Serial.printf("Frame: %lu  Speed: %u km/h  RPM: %u  Gear: %d  DRS: %s\n",
-                  (unsigned long)f.frameIdentifier,
-                  (unsigned int)f.telemetry.speedKmh,
-                  (unsigned int)f.telemetry.rpm,
-                  (int)f.telemetry.gear,
-                  f.telemetry.drsActive ? "ON" : "OFF");
-    Serial.printf("Thr: %u  Brk: %u  Fuel: %.1fL  ERS: %u  Pos: %u\n",
-                  (unsigned int)f.telemetry.throttle,
-                  (unsigned int)f.telemetry.brake,
-                  f.status.fuel,
-                  (unsigned int)f.status.ersEnergy,
-                  (unsigned int)f.lap.position);
-    lastSerial = now;
-  }
-
-  // update dashboard at ~12 FPS (SPI display is slow; faster rate starves UDP)
+  // ═══════════════════════════════════════════════════════════════════
+  // PRIORITY 2 — Render display (~20 FPS, only when data is fresh)
+  // ═══════════════════════════════════════════════════════════════════
   static uint32_t lastRender = 0;
-  if (now - lastRender >= 80) {
+  if (now - lastRender >= 50) {
+    // Network info overlay
+    bool hasEverReceived = (g_lastPacketMs != 0);
+    bool showNetInfo = (!hasEverReceived) || ((now - g_lastPacketMs) >= 10000);
+    if (showNetInfo && !g_networkInfoVisible) {
+      String ip = WiFi.localIP().toString();
+      dashboard_showNetworkInfo(ip.c_str(), g_listenPort, !hasEverReceived);
+      g_networkInfoVisible = true;
+    } else if (!showNetInfo && g_networkInfoVisible) {
+      dashboard_hideNetworkInfo();
+      g_networkInfoVisible = false;
+    }
+
     if (!g_networkInfoVisible) {
       dashboard_update(stateMgr);
     }
     lastRender = now;
+
+    // Let LWIP process packets that arrived during SPI render.
+    // WiFi hardware buffers raw frames while SPI blocks the CPU;
+    // yield() gives LWIP time to move them into the UDP socket buffer
+    // so the next drain loop finds them immediately.
+    yield();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // LOW PRIORITY — Serial debug + web server
+  // ═══════════════════════════════════════════════════════════════════
+  static uint32_t lastSerial = 0;
+  if (g_lastPacketMs != 0 && now - lastSerial >= 2000) {
+    const TelemetryFrame &f = stateMgr.current();
+    Serial.printf("[TEL] Spd:%u RPM:%u G:%d Thr:%u Brk:%u Pos:%u\n",
+                  (unsigned)f.telemetry.speedKmh, (unsigned)f.telemetry.rpm,
+                  (int)f.telemetry.gear, (unsigned)f.telemetry.throttle,
+                  (unsigned)f.telemetry.brake, (unsigned)f.lap.position);
+    lastSerial = now;
+  }
+
+  static uint32_t lastWeb = 0;
+  if (now - lastWeb >= 1000) {
+    server.handleClient();
+    lastWeb = now;
   }
 }

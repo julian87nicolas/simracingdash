@@ -27,19 +27,18 @@ void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     bgDrawn = true;
   }
 
-  // RPM LED arc (30 segments)
+  // RPM LED arc (15 segments — fewer SPI writes = less time blocking UDP)
   uint16_t rpm = frame.telemetry.rpm;
-  const int segs = 30;
+  const int segs = 15;
   const int segW = 460 / segs;
   const int segX = 10;
   const int segY = 20;
-  const int segH = 10;
+  const int segH = 12;
   for (int i = 0; i < segs; ++i) {
-    // threshold per segment
     uint16_t threshold = (uint16_t)((i+1) * (15000.0f / segs));
     uint32_t col = (threshold > 12000) ? TFT_RED : (threshold > 8000) ? TFT_ORANGE : TFT_GREEN;
     if (prevRpm == 0xFFFF || (rpm >= threshold) != (prevRpm >= threshold)) {
-      tft->fillRect(segX + i*segW, segY, segW-1, segH, (rpm >= threshold) ? col : TFT_DARKGREY);
+      tft->fillRect(segX + i*segW, segY, segW-2, segH, (rpm >= threshold) ? col : TFT_DARKGREY);
     }
   }
 
@@ -70,19 +69,19 @@ void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->drawString(sbuf, 240, 202);
   }
 
-  // Throttle & Brake small bars
-  int th = frame.telemetry.throttle; // 0-255
-  int br = frame.telemetry.brake;
-  const int bw = 40, bh = 4;
-  // left throttle
+  // Throttle & Brake bars — quantize to reduce unnecessary SPI writes
+  int th = frame.telemetry.throttle >> 2; // 0-63 (reduces noise redraws)
+  int br = frame.telemetry.brake >> 2;
+  const int bw = 120, bh = 8;
   if (th != prevTh) {
+    int fill = map(th, 0, 63, 0, bw);
     tft->fillRect(100, 240, bw, bh, TFT_DARKGREY);
-    tft->fillRect(100, 240, map(th, 0, 255, 0, bw), bh, TFT_GREEN);
+    if (fill > 0) tft->fillRect(100, 240, fill, bh, TFT_GREEN);
   }
-  // right brake
   if (br != prevBr) {
-    tft->fillRect(340, 240, bw, bh, TFT_DARKGREY);
-    tft->fillRect(340, 240, map(br, 0, 255, 0, bw), bh, TFT_RED);
+    int fill = map(br, 0, 63, 0, bw);
+    tft->fillRect(260, 240, bw, bh, TFT_DARKGREY);
+    if (fill > 0) tft->fillRect(260, 240, fill, bh, TFT_RED);
   }
 
   prevRpm = rpm;
