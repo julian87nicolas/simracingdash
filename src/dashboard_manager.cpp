@@ -118,15 +118,14 @@ static DashboardScreen selectScreenFromState(const StateManager &state) {
     g_stableMfd = g_rawMfd;
   }
 
-  // When MFD is open (0-4), latch that screen
+  // When MFD is open (0-4), show that screen
   if (g_stableMfd <= 4) {
     g_lastMfdScreen = mapMfdToScreen(g_stableMfd);
     g_everReceivedMfd = true;
+    return g_lastMfdScreen;
   }
-  // When MFD is closed (255) → keep last latched screen
-  // This prevents jumping back to MAIN every time MFD closes.
-
-  return g_lastMfdScreen;
+  // When MFD is closed (255) → return to RACE screen
+  return DashboardScreen::MAIN;
 }
 
 void dashboard_showNetworkInfo(const char* ip, uint16_t port, bool waitingData) {
