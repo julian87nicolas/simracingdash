@@ -23,9 +23,9 @@ static TFT_eSPI* g_tft = nullptr;
 static DashboardScreen currentScreen = DashboardScreen::MAIN;
 static bool g_showNetworkInfo = false;
 
-// Navigation state ─ latch last valid MFD selection so closing MFD keeps screen
+// Navigation state — latch last valid MFD selection so closing MFD keeps screen
 static DashboardScreen g_lastMfdScreen = DashboardScreen::MAIN;
-static bool g_everReceivedMfd = false;
+static bool g_everReceivedMfd = false;  // true once a valid MFD panel (0-4) has been seen
 static uint8_t g_rawMfd = 255;
 static uint8_t g_stableMfd = 255;
 static uint32_t g_mfdChangeMs = 0;
@@ -136,13 +136,17 @@ static DashboardScreen selectScreenFromState(const StateManager &state) {
     g_stableMfd = g_rawMfd;
   }
 
-  // When MFD is open (0-4), show that screen
+  // When MFD is open (0-4), latch and show that screen
   if (g_stableMfd <= 4) {
     g_lastMfdScreen = mapMfdToScreen(g_stableMfd);
     g_everReceivedMfd = true;
     return g_lastMfdScreen;
   }
-  // When MFD is closed (255) → return to RACE screen
+  // When MFD is closed (255): keep the last MFD screen if one was ever selected,
+  // otherwise fall back to the main race screen
+  if (g_everReceivedMfd) {
+    return g_lastMfdScreen;
+  }
   return DashboardScreen::MAIN;
 }
 
