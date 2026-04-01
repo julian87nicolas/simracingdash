@@ -20,7 +20,7 @@ void resetTempsDashboardCache();
 void resetEngineDashboardCache();
 
 static TFT_eSPI* g_tft = nullptr;
-static DashboardScreen currentScreen = DashboardScreen::MAIN;
+static DashboardScreen currentScreen = DashboardScreen::NONE;  // NONE forces tab draw on first update
 static bool g_showNetworkInfo = false;
 
 // Navigation state — latch last valid MFD selection so closing MFD keeps screen
@@ -184,8 +184,9 @@ void dashboard_hideNetworkInfo() {
   if (!g_tft) return;
   if (!g_showNetworkInfo) return;
   g_showNetworkInfo = false;
-  g_tft->fillScreen(TFT_BLACK);
   resetAllDashboardCaches();
+  g_tft->fillScreen(TFT_BLACK);
+  drawScreenTab(g_tft, currentScreen);
 }
 
 void dashboard_update(const StateManager &state) {

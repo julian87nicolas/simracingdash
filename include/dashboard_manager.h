@@ -4,6 +4,7 @@
 #include "state.h"
 
 enum class DashboardScreen {
+  NONE,     // Sentinel: no screen drawn yet (forces initial tab bar render)
   MAIN,     // Default race screen
   SETUP,    // MFD 0: brake bias, differential, ERS deploy
   PITS,     // MFD 1: pit stop config
