@@ -1,4 +1,4 @@
-// Minimal TFT_eSPI stub for host-side unit tests (moved under test/host)
+// Minimal TFT_eSPI stub for PlatformIO native tests
 #pragma once
 #include <cstdint>
 #include <cstdio>
@@ -6,7 +6,6 @@
 
 enum textdatum_t { TL_DATUM, TC_DATUM, TR_DATUM, ML_DATUM, MC_DATUM, MR_DATUM, BL_DATUM, BC_DATUM, BR_DATUM };
 
-// Color constants used by dashboards (16-bit RGB565 values)
 #define TFT_BLACK    0x0000
 #define TFT_WHITE    0xFFFF
 #define TFT_RED      0xF800

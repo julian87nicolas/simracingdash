@@ -71,7 +71,3 @@ struct TelemetryFrame {
   uint32_t frameIdentifier;
   uint8_t sessionType;  // 0=unknown,1-4=practice,5-9=quali,10-12=race,13=TT
 };
-
-// Forward declaration of parser function
-// buffer: raw UDP packet, len: packet length, out: frame to update
-void parseTelemetryPacket(const uint8_t* buffer, size_t len, TelemetryFrame &out);

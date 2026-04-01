@@ -1,0 +1,7 @@
+{
+  "name": "ArduinoStub",
+  "version": "1.0.0",
+  "build": {
+    "flags": "-Isrc"
+  }
+}
