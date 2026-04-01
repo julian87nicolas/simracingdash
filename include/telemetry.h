@@ -29,6 +29,8 @@ struct CarStatus {
   uint8_t brakeBias;    // percent
   uint8_t tyreCompound; // visual compound (16=soft,17=med,18=hard,7=inter,8=wet)
   uint8_t tyresAgeLaps; // laps on current set
+  uint8_t diffOnThrottle;  // differential on throttle %
+  uint8_t diffOffThrottle; // differential off throttle %
 };
 
 // Car damage / engine wear
@@ -53,6 +55,7 @@ struct LapData {
 namespace F1Packets {
   constexpr uint8_t PACKET_ID_SESSION = 1;
   constexpr uint8_t PACKET_ID_LAP_DATA = 2;
+  constexpr uint8_t PACKET_ID_CAR_SETUP = 5;
   constexpr uint8_t PACKET_ID_CAR_TELEMETRY = 6;
   constexpr uint8_t PACKET_ID_CAR_STATUS = 7;
   constexpr uint8_t PACKET_ID_CAR_DAMAGE = 10;

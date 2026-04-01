@@ -189,19 +189,30 @@ void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
       out.lap.pitStatus   = rd8(buf, len, base + pitOff);
     } break;
 
-    // ── Car Damage (packet 10) ──
-    // Per-car: 52 bytes (same F1 22-25)
-    //   +0  float[4]  tyresWear (RL,RR,FL,FR) — 0-100%
-    //   +46 uint8 engineMGUHWear
-    //   +47 uint8 engineESWear
-    //   +48 uint8 engineCEWear
-    //   +49 uint8 engineICEWear
-    //   +50 uint8 engineMGUKWear
-    //   +51 uint8 engineTCWear
-    case F1Packets::PACKET_ID_CAR_DAMAGE: {
-      const size_t CS = 52;
+    // ── Car Setup (packet 5) ──
+    // Per-car: 49 bytes
+    //   +2  uint8 onThrottleDiff  (differential on throttle %)
+    //   +3  uint8 offThrottleDiff (differential off throttle %)
+    case F1Packets::PACKET_ID_CAR_SETUP: {
+      const size_t CS = 49;
       size_t base = hdrSize + (size_t)pci * CS;
-      if (base + 52 > len) break;
+      if (base + 4 > len) break;
+      out.status.diffOnThrottle  = rd8(buf, len, base + 2);
+      out.status.diffOffThrottle = rd8(buf, len, base + 3);
+    } break;
+
+    // ── Car Damage (packet 10) ──
+    // F1 23+: 42 bytes/car (tyresDamage/brakesDamage are uint8[4])
+    //   +0  float[4] tyresWear (RL,RR,FL,FR) — 0-100%
+    //   +34 uint8 engineMGUHWear … +39 engineTCWear
+    // F1 22:  63 bytes/car (tyresDamage/brakesDamage are float[4])
+    //   +57 engineMGUHWear … +62 engineTCWear
+    case F1Packets::PACKET_ID_CAR_DAMAGE: {
+      size_t CS, ewOff;
+      if (fmt >= 2023) { CS = 42; ewOff = 34; }
+      else             { CS = 63; ewOff = 57; }
+      size_t base = hdrSize + (size_t)pci * CS;
+      if (base + CS > len) break;
       // Tyre wear: packet RL,RR,FL,FR → store FL,FR,RL,RR
       float wFL = rdF(buf, len, base + 8);  // index 2 = FL
       float wFR = rdF(buf, len, base + 12); // index 3 = FR
@@ -212,12 +223,12 @@ void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
       out.damage.tyresWear[2] = (uint8_t)(wRL < 0 ? 0 : (wRL > 100 ? 100 : wRL));
       out.damage.tyresWear[3] = (uint8_t)(wRR < 0 ? 0 : (wRR > 100 ? 100 : wRR));
       // Engine component wear
-      out.damage.engineMGUHWear = rd8(buf, len, base + 46);
-      out.damage.engineESWear   = rd8(buf, len, base + 47);
-      out.damage.engineCEWear   = rd8(buf, len, base + 48);
-      out.damage.engineICEWear  = rd8(buf, len, base + 49);
-      out.damage.engineMGUKWear = rd8(buf, len, base + 50);
-      out.damage.engineTCWear   = rd8(buf, len, base + 51);
+      out.damage.engineMGUHWear = rd8(buf, len, base + ewOff);
+      out.damage.engineESWear   = rd8(buf, len, base + ewOff + 1);
+      out.damage.engineCEWear   = rd8(buf, len, base + ewOff + 2);
+      out.damage.engineICEWear  = rd8(buf, len, base + ewOff + 3);
+      out.damage.engineMGUKWear = rd8(buf, len, base + ewOff + 4);
+      out.damage.engineTCWear   = rd8(buf, len, base + ewOff + 5);
     } break;
 
     default: break;

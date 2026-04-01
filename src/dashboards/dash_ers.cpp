@@ -13,11 +13,14 @@ static uint16_t prevSpeed = 0xFFFF;
 static uint8_t prevBias = 0xFF;
 static uint8_t prevMode = 0xFF;
 static int prevErs = -1;
+static uint8_t prevDiffOn = 0xFF;
+static uint8_t prevDiffOff = 0xFF;
 
 void resetSetupDashboardCache() {
   bgDrawn = false;
   prevGear = 127; prevSpeed = 0xFFFF;
   prevBias = 0xFF; prevMode = 0xFF; prevErs = -1;
+  prevDiffOn = 0xFF; prevDiffOff = 0xFF;
 }
 
 static void drawHBar(TFT_eSPI* tft, int x, int y, int w, int h,
@@ -44,8 +47,9 @@ void drawSetupDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->drawFastHLine(20, 82, 440, 0x4208);
 
     tft->drawString("BRAKE BIAS", 20, 88);
-    tft->drawString("ERS DEPLOY MODE", 20, 156);
-    tft->drawString("ERS ENERGY STORE", 20, 224);
+    tft->drawString("DIFFERENTIAL", 20, 148);
+    tft->drawString("ERS DEPLOY MODE", 20, 208);
+    tft->drawString("ERS ENERGY STORE", 20, 256);
     bgDrawn = true;
   }
 
@@ -105,33 +109,52 @@ void drawSetupDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->drawString(buf, 410, 106);
   }
 
+  // ── Differential ──
+  uint8_t diffOn = frame.status.diffOnThrottle;
+  uint8_t diffOff = frame.status.diffOffThrottle;
+  if (diffOn != prevDiffOn || diffOff != prevDiffOff) {
+    tft->setTextFont(4); tft->setTextSize(1);
+    tft->setTextColor(TFT_WHITE, TFT_BLACK);
+    // ON label + value
+    tft->setTextDatum(TL_DATUM);
+    tft->fillRect(20, 166, 200, 28, TFT_BLACK);
+    char buf[16];
+    snprintf(buf, sizeof(buf), "ON: %u%%", (unsigned)diffOn);
+    tft->drawString(buf, 20, 168);
+    // OFF label + value
+    tft->fillRect(240, 166, 200, 28, TFT_BLACK);
+    snprintf(buf, sizeof(buf), "OFF: %u%%", (unsigned)diffOff);
+    tft->drawString(buf, 240, 168);
+  }
+
   // ── ERS deploy mode ──
   uint8_t mode = frame.status.ersDeployMode;
   if (mode != prevMode) {
     const char* names[] = {"NONE", "MEDIUM", "HOTLAP", "OVERTAKE"};
     const uint16_t cols[] = {TFT_DARKGREY, TFT_CYAN, TFT_YELLOW, TFT_RED};
     uint8_t mi = (mode <= 3) ? mode : 0;
-    tft->fillRect(20, 174, 440, 32, TFT_BLACK);
-    tft->fillRoundRect(20, 174, 16 + strlen(names[mi]) * 14, 30, 6, cols[mi]);
+    tft->fillRect(20, 226, 440, 28, TFT_BLACK);
+    tft->fillRoundRect(20, 226, 16 + strlen(names[mi]) * 14, 26, 6, cols[mi]);
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(ML_DATUM);
     tft->setTextColor(TFT_BLACK, cols[mi]);
-    tft->drawString(names[mi], 28, 189);
+    tft->drawString(names[mi], 28, 239);
   }
 
   // ── ERS energy bar ──
   int ers = min(1000, (int)frame.status.ersEnergy);
   if (ers != prevErs) {
-    drawHBar(tft, 20, 242, 380, 22, ers, 1000, TFT_BLUE);
+    drawHBar(tft, 20, 274, 380, 20, ers, 1000, TFT_BLUE);
     char buf[8];
     snprintf(buf, sizeof(buf), "%u%%", (unsigned)(ers / 10));
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    tft->fillRect(410, 240, 65, 28, TFT_BLACK);
-    tft->drawString(buf, 410, 242);
+    tft->fillRect(410, 272, 65, 26, TFT_BLACK);
+    tft->drawString(buf, 410, 274);
   }
 
   prevGear = gear; prevSpeed = speed;
   prevBias = bias; prevMode = mode; prevErs = ers;
+  prevDiffOn = diffOn; prevDiffOff = diffOff;
 }
