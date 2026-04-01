@@ -194,7 +194,7 @@ void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
     //   +2  uint8 onThrottleDiff  (differential on throttle %)
     //   +3  uint8 offThrottleDiff (differential off throttle %)
     case F1Packets::PACKET_ID_CAR_SETUP: {
-      const size_t CS = 49;
+      const size_t CS = (fmt >= 2024) ? 50 : 49;
       size_t base = hdrSize + (size_t)pci * CS;
       if (base + 4 > len) break;
       out.status.diffOnThrottle  = rd8(buf, len, base + 2);
@@ -202,15 +202,17 @@ void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
     } break;
 
     // ── Car Damage (packet 10) ──
-    // F1 23+: 42 bytes/car (tyresDamage/brakesDamage are uint8[4])
-    //   +0  float[4] tyresWear (RL,RR,FL,FR) — 0-100%
-    //   +34 uint8 engineMGUHWear … +39 engineTCWear
+    // F1 25:  46 bytes/car (has tyreBlisters[4])
+    //   +38 engineMGUHWear … +43 engineTCWear, gearBoxDamage at +36
+    // F1 23/24: 42 bytes/car (tyresDamage/brakesDamage are uint8[4])
+    //   +34 engineMGUHWear … +39 engineTCWear, gearBoxDamage at +32
     // F1 22:  63 bytes/car (tyresDamage/brakesDamage are float[4])
-    //   +57 engineMGUHWear … +62 engineTCWear
+    //   +57 engineMGUHWear … +62 engineTCWear, gearBoxDamage at +56
     case F1Packets::PACKET_ID_CAR_DAMAGE: {
-      size_t CS, ewOff;
-      if (fmt >= 2023) { CS = 42; ewOff = 34; }
-      else             { CS = 63; ewOff = 57; }
+      size_t CS, ewOff, gboxOff;
+      if (fmt >= 2025)      { CS = 46; ewOff = 38; gboxOff = 36; }
+      else if (fmt >= 2023) { CS = 42; ewOff = 34; gboxOff = 32; }
+      else                  { CS = 63; ewOff = 57; gboxOff = 56; }
       size_t base = hdrSize + (size_t)pci * CS;
       if (base + CS > len) break;
       // Tyre wear: packet RL,RR,FL,FR → store FL,FR,RL,RR
@@ -222,13 +224,14 @@ void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
       out.damage.tyresWear[1] = (uint8_t)(wFR < 0 ? 0 : (wFR > 100 ? 100 : wFR));
       out.damage.tyresWear[2] = (uint8_t)(wRL < 0 ? 0 : (wRL > 100 ? 100 : wRL));
       out.damage.tyresWear[3] = (uint8_t)(wRR < 0 ? 0 : (wRR > 100 ? 100 : wRR));
-      // Engine component wear
+      // Engine component wear (0=new, 100=fully worn)
       out.damage.engineMGUHWear = rd8(buf, len, base + ewOff);
       out.damage.engineESWear   = rd8(buf, len, base + ewOff + 1);
       out.damage.engineCEWear   = rd8(buf, len, base + ewOff + 2);
       out.damage.engineICEWear  = rd8(buf, len, base + ewOff + 3);
       out.damage.engineMGUKWear = rd8(buf, len, base + ewOff + 4);
       out.damage.engineTCWear   = rd8(buf, len, base + ewOff + 5);
+      out.damage.gearBoxDamage  = rd8(buf, len, base + gboxOff);
     } break;
 
     default: break;

@@ -13,14 +13,13 @@ static uint16_t prevSpeed = 0xFFFF;
 static uint8_t prevBias = 0xFF;
 static uint8_t prevMode = 0xFF;
 static int prevErs = -1;
-static uint8_t prevDiffOn = 0xFF;
-static uint8_t prevDiffOff = 0xFF;
+static uint8_t prevDiff = 0xFF;
 
 void resetSetupDashboardCache() {
   bgDrawn = false;
   prevGear = 127; prevSpeed = 0xFFFF;
   prevBias = 0xFF; prevMode = 0xFF; prevErs = -1;
-  prevDiffOn = 0xFF; prevDiffOff = 0xFF;
+  prevDiff = 0xFF;
 }
 
 static void drawHBar(TFT_eSPI* tft, int x, int y, int w, int h,
@@ -41,9 +40,11 @@ void drawSetupDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->drawFastHLine(20, 28, 440, 0x4208);
 
     tft->setTextFont(2); tft->setTextSize(1);
+    tft->setTextDatum(MC_DATUM);
     tft->setTextColor(0x6B4D, TFT_BLACK);
-    tft->drawString("GEAR", 40, 32);
-    tft->drawString("SPEED", 340, 32);
+    tft->drawString("GEAR", 155, 55);
+    tft->drawString("SPEED", 235, 55);
+    tft->setTextDatum(TL_DATUM);
     tft->drawFastHLine(20, 82, 440, 0x4208);
 
     tft->drawString("BRAKE BIAS", 20, 88);
@@ -64,8 +65,8 @@ void drawSetupDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextColor(gc, TFT_BLACK);
     tft->setTextFont(7); tft->setTextSize(1);
     tft->setTextDatum(MC_DATUM);
-    tft->fillRect(20, 44, 110, 36, TFT_BLACK);
-    tft->drawString(gtxt, 75, 62);
+    tft->fillRect(20, 30, 110, 50, TFT_BLACK);
+    tft->drawString(gtxt, 75, 55);
   }
   uint16_t speed = frame.telemetry.speedKmh;
   if (speed != prevSpeed) {
@@ -74,12 +75,12 @@ void drawSetupDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextColor(TFT_WHITE, TFT_BLACK);
     tft->setTextFont(7); tft->setTextSize(1);
     tft->setTextDatum(MR_DATUM);
-    tft->fillRect(270, 44, 150, 36, TFT_BLACK);
-    tft->drawString(sbuf, 415, 62);
+    tft->fillRect(270, 30, 150, 50, TFT_BLACK);
+    tft->drawString(sbuf, 415, 55);
     tft->setTextFont(2); tft->setTextSize(1);
     tft->setTextColor(0x6B4D, TFT_BLACK);
     tft->setTextDatum(ML_DATUM);
-    tft->drawString("km/h", 420, 58);
+    tft->drawString("km/h", 420, 51);
   }
 
   // ── Brake bias ──
@@ -109,22 +110,18 @@ void drawSetupDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->drawString(buf, 410, 106);
   }
 
-  // ── Differential ──
-  uint8_t diffOn = frame.status.diffOnThrottle;
-  uint8_t diffOff = frame.status.diffOffThrottle;
-  if (diffOn != prevDiffOn || diffOff != prevDiffOff) {
+  // ── Differential (single on-throttle value, matching MFD) ──
+  uint8_t diff = frame.status.diffOnThrottle;
+  if (diff != prevDiff) {
+    uint8_t displayDiff = (diff > 100) ? 100 : diff;
+    drawHBar(tft, 20, 166, 380, 20, displayDiff, 100, TFT_CYAN);
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%u%%", (unsigned)diff);
     tft->setTextFont(4); tft->setTextSize(1);
-    tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    // ON label + value
     tft->setTextDatum(TL_DATUM);
-    tft->fillRect(20, 166, 200, 28, TFT_BLACK);
-    char buf[16];
-    snprintf(buf, sizeof(buf), "ON: %u%%", (unsigned)diffOn);
-    tft->drawString(buf, 20, 168);
-    // OFF label + value
-    tft->fillRect(240, 166, 200, 28, TFT_BLACK);
-    snprintf(buf, sizeof(buf), "OFF: %u%%", (unsigned)diffOff);
-    tft->drawString(buf, 240, 168);
+    tft->setTextColor(TFT_WHITE, TFT_BLACK);
+    tft->fillRect(410, 164, 65, 28, TFT_BLACK);
+    tft->drawString(buf, 410, 166);
   }
 
   // ── ERS deploy mode ──
@@ -156,5 +153,5 @@ void drawSetupDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
 
   prevGear = gear; prevSpeed = speed;
   prevBias = bias; prevMode = mode; prevErs = ers;
-  prevDiffOn = diffOn; prevDiffOff = diffOff;
+  prevDiff = diff;
 }

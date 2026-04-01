@@ -12,8 +12,9 @@
 //               Left column: Throttle vertical bar + label
 //               Right column: Brake vertical bar + label
 //   Row 185-215: Speed (large, centered)
-//   Row 225-260: Position (left), Lap time (center), Fuel (right)
-//   Row 270-295: Brake bias (left), ERS mode (right)
+//   Row 218-252: Position (left), Lap time (center), Fuel (right)
+//   Row 254-288: Brake bias (left), ERS mode (right)
+//   Row 291-299: ERS battery bar (horizontal)
 // ═══════════════════════════════════════════════════════════════════
 
 static bool bgDrawn = false;
@@ -28,13 +29,14 @@ static float prevLap = -1.0f;
 static int prevFuel = -1;
 static uint8_t prevBias = 0xFF;
 static uint8_t prevErsMode = 0xFF;
+static uint16_t prevErsEnergy = 0xFFFF;
 
 void resetMainDashboardCache() {
   bgDrawn = false;
   prevSpeed = 0xFFFF; prevGear = 127; prevRpm = 0xFFFF;
   prevTh = -1; prevBr = -1; prevDrs = false;
   prevPos = 0xFF; prevLap = -1.0f; prevFuel = -1;
-  prevBias = 0xFF; prevErsMode = 0xFF;
+  prevBias = 0xFF; prevErsMode = 0xFF; prevErsEnergy = 0xFFFF;
 }
 
 // Helper: draw a vertical bar (bottom-up fill)
@@ -71,11 +73,14 @@ void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextFont(2); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(0x6B4D, TFT_BLACK);
-    tft->drawString("POS", 80, 228);
-    tft->drawString("LAP", 200, 228);
-    tft->drawString("FUEL", 370, 228);
-    tft->drawString("BIAS", 80, 268);
-    tft->drawString("ERS", 330, 268);
+    tft->drawString("POS", 80, 218);
+    tft->drawString("LAP", 200, 218);
+    tft->drawString("FUEL", 370, 218);
+    tft->drawString("BIAS", 80, 256);
+    tft->drawString("ERS", 330, 256);
+
+    // ERS battery bar outline
+    tft->drawRect(19, 290, 442, 10, 0x4208);
 
     bgDrawn = true;
   }
@@ -171,8 +176,8 @@ void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft->fillRect(80, 240, 80, 25, TFT_BLACK);
-    tft->drawString(pbuf, 80, 240);
+    tft->fillRect(80, 230, 80, 25, TFT_BLACK);
+    tft->drawString(pbuf, 80, 230);
   }
 
   // ── Last lap time ──
@@ -188,8 +193,8 @@ void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    tft->fillRect(200, 240, 140, 25, TFT_BLACK);
-    tft->drawString(lbuf, 200, 240);
+    tft->fillRect(200, 230, 140, 25, TFT_BLACK);
+    tft->drawString(lbuf, 200, 230);
   }
 
   // ── Fuel ──
@@ -200,8 +205,8 @@ void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(TFT_CYAN, TFT_BLACK);
-    tft->fillRect(370, 240, 100, 25, TFT_BLACK);
-    tft->drawString(fbuf, 370, 240);
+    tft->fillRect(370, 230, 100, 25, TFT_BLACK);
+    tft->drawString(fbuf, 370, 230);
   }
 
   // ── Brake bias ──
@@ -212,8 +217,8 @@ void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    tft->fillRect(80, 278, 80, 22, TFT_BLACK);
-    tft->drawString(bbuf, 80, 278);
+    tft->fillRect(80, 268, 80, 22, TFT_BLACK);
+    tft->drawString(bbuf, 80, 268);
   }
 
   // ── ERS deploy mode ──
@@ -225,8 +230,25 @@ void drawMainDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(TL_DATUM);
     tft->setTextColor(mcols[mi], TFT_BLACK);
-    tft->fillRect(330, 278, 110, 22, TFT_BLACK);
-    tft->drawString(modes[mi], 330, 278);
+    tft->fillRect(330, 268, 110, 22, TFT_BLACK);
+    tft->drawString(modes[mi], 330, 268);
+  }
+
+  // ── ERS battery bar (0-1000 scaled) ──
+  uint16_t ersE = frame.status.ersEnergy;
+  if (ersE != prevErsEnergy) {
+    const int barX = 20, barY = 291, barW = 440, barH = 8;
+    tft->fillRect(barX, barY, barW, barH, 0x2104); // empty bg
+    int fill = (int)((long)ersE * barW / 1000);
+    if (fill > barW) fill = barW;
+    if (fill > 0) {
+      uint16_t col;
+      if (ersE < 100)      col = TFT_RED;
+      else if (ersE <= 200) col = TFT_ORANGE;
+      else                  col = TFT_YELLOW;
+      tft->fillRect(barX, barY, fill, barH, col);
+    }
+    prevErsEnergy = ersE;
   }
 
   prevRpm = rpm; prevSpeed = speed; prevGear = gear;

@@ -44,9 +44,11 @@ void drawPitsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->drawFastHLine(20, 28, 440, 0x4208);
 
     tft->setTextFont(2); tft->setTextSize(1);
+    tft->setTextDatum(MC_DATUM);
     tft->setTextColor(0x6B4D, TFT_BLACK);
-    tft->drawString("GEAR", 40, 32);
-    tft->drawString("SPEED", 340, 32);
+    tft->drawString("GEAR", 155, 55);
+    tft->drawString("SPEED", 235, 55);
+    tft->setTextDatum(TL_DATUM);
     tft->drawFastHLine(20, 82, 440, 0x4208);
 
     tft->drawString("PIT STATUS", 20, 88);
@@ -69,8 +71,8 @@ void drawPitsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextColor(gc, TFT_BLACK);
     tft->setTextFont(7); tft->setTextSize(1);
     tft->setTextDatum(MC_DATUM);
-    tft->fillRect(20, 44, 110, 36, TFT_BLACK);
-    tft->drawString(gtxt, 75, 62);
+    tft->fillRect(20, 30, 110, 50, TFT_BLACK);
+    tft->drawString(gtxt, 75, 55);
   }
   uint16_t speed = frame.telemetry.speedKmh;
   if (speed != prevSpeed) {
@@ -79,12 +81,12 @@ void drawPitsDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextColor(TFT_WHITE, TFT_BLACK);
     tft->setTextFont(7); tft->setTextSize(1);
     tft->setTextDatum(MR_DATUM);
-    tft->fillRect(270, 44, 150, 36, TFT_BLACK);
-    tft->drawString(sbuf, 415, 62);
+    tft->fillRect(270, 30, 150, 50, TFT_BLACK);
+    tft->drawString(sbuf, 415, 55);
     tft->setTextFont(2); tft->setTextSize(1);
     tft->setTextColor(0x6B4D, TFT_BLACK);
     tft->setTextDatum(ML_DATUM);
-    tft->drawString("km/h", 420, 58);
+    tft->drawString("km/h", 420, 51);
   }
 
   // ── Pit status badge ──

@@ -42,6 +42,7 @@ struct CarDamage {
   uint8_t engineICEWear;    // 0-100 %
   uint8_t engineMGUKWear;   // 0-100 %
   uint8_t engineTCWear;     // 0-100 %
+  uint8_t gearBoxDamage;    // 0-100 %
 };
 
 // Lap data minimal

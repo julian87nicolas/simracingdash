@@ -68,9 +68,13 @@ void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     bgDrawn = true;
   }
 
-  // ── Gear + Speed inside car outline ──
+  // ── Gear + Speed inside car outline (redraw both together to avoid overlap) ──
   int8_t gear = frame.telemetry.gear;
-  if (gear != prevGear) {
+  uint16_t speed = frame.telemetry.speedKmh;
+  if (gear != prevGear || speed != prevSpeed) {
+    // Clear the entire gear+speed row at once
+    tft->fillRect(172, 80, 136, 50, TFT_BLACK);
+    // Gear (left half)
     char gtxt[4];
     if (gear == 0) strcpy(gtxt, "N");
     else if (gear == -1) strcpy(gtxt, "R");
@@ -79,21 +83,17 @@ void drawTyresDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextColor(gc, TFT_BLACK);
     tft->setTextFont(7); tft->setTextSize(1);
     tft->setTextDatum(MC_DATUM);
-    tft->fillRect(180, 80, 60, 50, TFT_BLACK);
-    tft->drawString(gtxt, 210, 105);
-  }
-  uint16_t speed = frame.telemetry.speedKmh;
-  if (speed != prevSpeed) {
+    tft->drawString(gtxt, 205, 105);
+    // Speed (right half)
     char sbuf[8];
     snprintf(sbuf, sizeof(sbuf), "%u", (unsigned)speed);
     tft->setTextColor(TFT_WHITE, TFT_BLACK);
-    tft->setTextFont(7); tft->setTextSize(1);
+    tft->setTextFont(4); tft->setTextSize(1);
     tft->setTextDatum(MC_DATUM);
-    tft->fillRect(240, 80, 65, 50, TFT_BLACK);
-    tft->drawString(sbuf, 270, 105);
+    tft->drawString(sbuf, 270, 100);
     tft->setTextFont(2); tft->setTextSize(1);
     tft->setTextColor(0x6B4D, TFT_BLACK);
-    tft->drawString("km/h", 240, 135);
+    tft->drawString("km/h", 270, 120);
   }
 
   // ── Compound + Age in car center ──

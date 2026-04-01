@@ -4,18 +4,18 @@
 
 // ═══════════════════════════════════════════════════════════════════
 // ENGINE WEAR DASHBOARD — MFD 4
-// Shows % wear of each engine component (ICE, TC, MGUH, MGUK, ES, CE)
+// Shows % wear of each engine component (MGU-H, SAE, EC, MCI, MGU-K, TC, GEAR)
 // ═══════════════════════════════════════════════════════════════════
 
 static bool bgDrawn = false;
 static int8_t prevGear = 127;
 static uint16_t prevSpeed = 0xFFFF;
-static uint8_t prevWear[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+static uint8_t prevWear[7] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
 void resetEngineDashboardCache() {
   bgDrawn = false;
   prevGear = 127; prevSpeed = 0xFFFF;
-  memset(prevWear, 0xFF, 6);
+  memset(prevWear, 0xFF, 7);
 }
 
 static void drawWearBar(TFT_eSPI* tft, int x, int y, int w, int h,
@@ -37,18 +37,19 @@ void drawEngineDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->drawFastHLine(20, 28, 440, 0x4208);
 
     tft->setTextFont(2); tft->setTextSize(1);
+    tft->setTextDatum(MC_DATUM);
     tft->setTextColor(0x6B4D, TFT_BLACK);
-    tft->drawString("GEAR", 40, 32);
-    tft->drawString("SPEED", 340, 32);
+    tft->drawString("GEAR", 155, 55);
+    tft->drawString("SPEED", 235, 55);
     tft->drawFastHLine(20, 82, 440, 0x4208);
 
-    // Component labels (6 rows, 34px each, starting at y=86)
-    const char* labels[] = {"ICE", "TC", "MGU-H", "MGU-K", "ES", "CE"};
-    for (int i = 0; i < 6; ++i) {
+    // Component labels (7 rows, 30px each, starting at y=86)
+    const char* labels[] = {"MGU-H", "SAE", "EC", "MCI", "MGU-K", "TC", "GEAR"};
+    for (int i = 0; i < 7; ++i) {
       tft->setTextFont(4); tft->setTextSize(1);
       tft->setTextDatum(ML_DATUM);
       tft->setTextColor(0x6B4D, TFT_BLACK);
-      tft->drawString(labels[i], 20, 98 + i * 34);
+      tft->drawString(labels[i], 20, 97 + i * 30);
     }
     bgDrawn = true;
   }
@@ -64,8 +65,8 @@ void drawEngineDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextColor(gc, TFT_BLACK);
     tft->setTextFont(7); tft->setTextSize(1);
     tft->setTextDatum(MC_DATUM);
-    tft->fillRect(20, 44, 110, 36, TFT_BLACK);
-    tft->drawString(gtxt, 75, 62);
+    tft->fillRect(20, 30, 110, 50, TFT_BLACK);
+    tft->drawString(gtxt, 75, 55);
   }
   uint16_t speed = frame.telemetry.speedKmh;
   if (speed != prevSpeed) {
@@ -74,35 +75,37 @@ void drawEngineDashboard(TFT_eSPI* tft, const TelemetryFrame &frame) {
     tft->setTextColor(TFT_WHITE, TFT_BLACK);
     tft->setTextFont(7); tft->setTextSize(1);
     tft->setTextDatum(MR_DATUM);
-    tft->fillRect(270, 44, 150, 36, TFT_BLACK);
-    tft->drawString(sbuf, 415, 62);
+    tft->fillRect(270, 30, 150, 50, TFT_BLACK);
+    tft->drawString(sbuf, 415, 55);
     tft->setTextFont(2); tft->setTextSize(1);
     tft->setTextColor(0x6B4D, TFT_BLACK);
     tft->setTextDatum(ML_DATUM);
-    tft->drawString("km/h", 420, 58);
+    tft->drawString("km/h", 420, 51);
   }
 
-  // ── 6 engine wear bars ──
-  const uint8_t wears[] = {
-    frame.damage.engineICEWear,
-    frame.damage.engineTCWear,
+  // ── 7 engine wear bars (raw = wear %: 0=new, 100=worn) ──
+  const uint8_t rawWear[] = {
     frame.damage.engineMGUHWear,
-    frame.damage.engineMGUKWear,
     frame.damage.engineESWear,
-    frame.damage.engineCEWear
+    frame.damage.engineCEWear,
+    frame.damage.engineICEWear,
+    frame.damage.engineMGUKWear,
+    frame.damage.engineTCWear,
+    frame.damage.gearBoxDamage
   };
-  for (int i = 0; i < 6; ++i) {
-    if (wears[i] != prevWear[i]) {
-      int y = 88 + i * 34;
-      drawWearBar(tft, 100, y, 300, 20, wears[i]);
+  for (int i = 0; i < 7; ++i) {
+    uint8_t wear = (rawWear[i] > 100) ? 100 : rawWear[i];
+    if (wear != prevWear[i]) {
+      int y = 88 + i * 30;
+      drawWearBar(tft, 100, y, 300, 18, wear);
       char buf[8];
-      snprintf(buf, sizeof(buf), "%u%%", (unsigned)wears[i]);
+      snprintf(buf, sizeof(buf), "%u%%", (unsigned)wear);
       tft->setTextFont(4); tft->setTextSize(1);
       tft->setTextDatum(TL_DATUM);
       tft->setTextColor(TFT_WHITE, TFT_BLACK);
-      tft->fillRect(410, y - 2, 65, 26, TFT_BLACK);
+      tft->fillRect(410, y - 2, 65, 22, TFT_BLACK);
       tft->drawString(buf, 410, y);
-      prevWear[i] = wears[i];
+      prevWear[i] = wear;
     }
   }
 
