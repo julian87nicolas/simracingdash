@@ -31,15 +31,32 @@ static uint8_t g_stableMfd = 255;
 static uint32_t g_mfdChangeMs = 0;
 static const uint32_t MFD_DEBOUNCE_MS = 200;
 
-// MFD index → screen mapping (matches F1 game MFD order)
+// Session type tracking for MFD mapping
+static uint8_t g_sessionType = 0;
+static bool isRaceSession() { return g_sessionType >= 10 && g_sessionType <= 12; }
+
+// MFD index → screen mapping — varies by session type!
+// Race:     0=Setup, 1=Pits, 2=Tyres, 3=Temps, 4=Engine
+// Non-race: 0=Setup, 1=Tyres, 2=Temps, 3=Engine  (no Pits panel)
 static DashboardScreen mapMfdToScreen(uint8_t mfd) {
-  switch (mfd) {
-    case 0: return DashboardScreen::SETUP;   // brake/diff/ERS config
-    case 1: return DashboardScreen::PITS;    // pit stop config
-    case 2: return DashboardScreen::TYRES;   // tyre wear status
-    case 3: return DashboardScreen::TEMPS;   // temperatures
-    case 4: return DashboardScreen::ENGINE;  // engine component wear
-    default: return DashboardScreen::MAIN;
+  if (isRaceSession()) {
+    switch (mfd) {
+      case 0: return DashboardScreen::SETUP;
+      case 1: return DashboardScreen::PITS;
+      case 2: return DashboardScreen::TYRES;
+      case 3: return DashboardScreen::TEMPS;
+      case 4: return DashboardScreen::ENGINE;
+      default: return DashboardScreen::MAIN;
+    }
+  } else {
+    // Practice, qualifying, time trial — no pit stop panel
+    switch (mfd) {
+      case 0: return DashboardScreen::SETUP;
+      case 1: return DashboardScreen::TYRES;
+      case 2: return DashboardScreen::TEMPS;
+      case 3: return DashboardScreen::ENGINE;
+      default: return DashboardScreen::MAIN;
+    }
   }
 }
 
@@ -106,6 +123,7 @@ void dashboard_init(TFT_eSPI* tft) {
 
 static DashboardScreen selectScreenFromState(const StateManager &state) {
   const auto &f = state.current();
+  g_sessionType = f.sessionType;  // keep session type updated
   uint8_t mfd = f.telemetry.mfdPanelIndex;
   uint32_t now = millis();
 

@@ -90,6 +90,15 @@ void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
 
   switch (packetId) {
 
+    // ── Session Data (packet 1) ──
+    // m_sessionType at offset hdrSize + 6
+    // 1-4=practice, 5-9=quali, 10-12=race, 13=time trial
+    case F1Packets::PACKET_ID_SESSION: {
+      if (hdrSize + 7 <= len) {
+        out.sessionType = rd8(buf, len, hdrSize + 6);
+      }
+    } break;
+
     // ── Car Telemetry (packet 6) ──
     // Per-car struct: 60 bytes (same layout F1 22-25)
     //   +0  uint16 speed

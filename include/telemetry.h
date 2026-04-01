@@ -51,6 +51,7 @@ struct LapData {
 
 // Packet detection constants
 namespace F1Packets {
+  constexpr uint8_t PACKET_ID_SESSION = 1;
   constexpr uint8_t PACKET_ID_LAP_DATA = 2;
   constexpr uint8_t PACKET_ID_CAR_TELEMETRY = 6;
   constexpr uint8_t PACKET_ID_CAR_STATUS = 7;
@@ -64,6 +65,7 @@ struct TelemetryFrame {
   CarDamage damage;
   LapData lap;
   uint32_t frameIdentifier;
+  uint8_t sessionType;  // 0=unknown,1-4=practice,5-9=quali,10-12=race,13=TT
 };
 
 // Forward declaration of parser function
