@@ -65,6 +65,37 @@ platformio run -e nodemcuv2 -t upload
 platformio device monitor -e nodemcuv2 -b 115200
 ```
 
+**Flasheo al ESP8266 (NodeMCU v2)**
+
+- Usando PlatformIO (recomendado): compila y sube directamente al puerto serie detectado.
+
+```bash
+# compilar y subir (reemplaza el entorno si lo cambiaste)
+platformio run -e nodemcuv2 -t upload
+
+# abrir monitor serie (115200 baudios)
+platformio device monitor -e nodemcuv2 -b 115200
+```
+
+- Si prefieres usar `esptool.py` manualmente (necesitas compilar primero):
+
+```bash
+# compilar sin subir
+platformio run -e nodemcuv2
+
+# firmware resultante (ejemplo): .pio/build/nodemcuv2/firmware.bin
+# identifica el puerto serie en macOS con: ls /dev/tty.*  o pio device list
+esptool.py --port /dev/tty.SOME_USB_PORT write_flash 0x00000 .pio/build/nodemcuv2/firmware.bin
+
+# luego abrir monitor serie
+platformio device monitor -e nodemcuv2 -b 115200
+```
+
+Notas rápidas:
+- En macOS los puertos suelen verse como `/dev/tty.SLAB_USBtoUART` o `/dev/tty.usbserial-XXXX`.
+- Si PlatformIO no detecta el puerto, ejecuta `platformio device list`.
+- El firmware ahora incluye un portal de configuración WiFi: si el ESP no tiene credenciales guardadas arrancará como AP `F1Dash-Setup` en la IP 192.168.4.1.
+
 Si no tienes PlatformIO en el PATH, usa `pio` (alias) o la extensión PlatformIO en VS Code.
 
 **Pruebas (unificadas)**
@@ -157,4 +188,54 @@ Run unified tests (prefer PlatformIO native, fallback to g++ host builds):
 ```
 
 PlatformIO tests live under `test/` (Unity). Host-side helper tests live under `test/host/`.
+
+Emulación local (sin placa ni pantalla)
+-------------------------------------
+
+Puedes probar la lógica de parser y envío de telemetría usando el emisor incluido:
+
+- `tools/telemetry_sender`: pequeño servidor en Go que envía paquetes UDP simulando telemetría de F1.
+
+Compilar y ejecutar el emisor:
+
+```bash
+cd tools/telemetry_sender
+go build -o ../../build/telemetry_sender main.go
+cd -
+
+# ejecutar el emisor apuntando a la IP:PORT del receptor (por defecto 127.0.0.1:20777)
+./build/telemetry_sender -addr 127.0.0.1:20777
+```
+
+Notas:
+- El emisor permite probar que el receptor (ESP o cualquier listener UDP) reciba paquetes correctamente.
+
+Scripts (conveniencia)
+----------------------
+
+Se incluyen scripts para simplificar la compilación y ejecución en `scripts/`.
+
+
+- `scripts/build_sender.sh`: compila el emisor Go y coloca el binario en `build/telemetry_sender`.
+- `scripts/build_all.sh`: compila los artefactos necesarios (ahora solo el emisor).
+- `scripts/run_sender.sh`: ejecuta `build/telemetry_sender` (acepta un argumento `IP:PORT`, por defecto `127.0.0.1:20777`).
+- `scripts/run_both.sh`: construye y ejecuta el emisor.
+
+Ejemplos rápidos:
+
+```bash
+# construir todo (emisor)
+./scripts/build_all.sh
+
+# ejecutar emisor (terminal)
+./scripts/run_sender.sh 127.0.0.1:20777
+
+# o construir y ejecutar (scripts/run_both.sh)
+./scripts/run_both.sh 127.0.0.1:20777
+```
+
+Notas sobre salida en terminal:
+- El emulador usa secuencias ANSI para redibujar la pantalla "en sitio" (sin hacer scroll). Si ves muchas líneas nuevas, asegúrate de ejecutar el binario recién compilado y de no tener instancias antiguas corriendo.
+- Si quieres una visual más detallada puedo aumentar la resolución del canvas ASCII o crear una versión SDL/PNG.
+
 

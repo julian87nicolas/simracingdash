@@ -1,5 +1,6 @@
 #include "state.h"
 #include <Arduino.h>
+#include <cstring>
 
 StateManager::StateManager() {
   memset(&curr, 0, sizeof(curr));

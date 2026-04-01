@@ -1,81 +1,157 @@
 #include "telemetry_parser.h"
 #include <Arduino.h>
+#include <cstring>
 #include "telemetry.h"
 
-// Helper: safe reads (little-endian)
-static inline uint8_t read_u8(const uint8_t* b, size_t len, size_t off) {
+// Safe little-endian readers
+static inline uint8_t rd8(const uint8_t* b, size_t len, size_t off) {
   return (off < len) ? b[off] : 0;
 }
-static inline uint16_t read_u16(const uint8_t* b, size_t len, size_t off) {
+static inline uint16_t rd16(const uint8_t* b, size_t len, size_t off) {
   if (off + 1 >= len) return 0;
   return (uint16_t)b[off] | ((uint16_t)b[off+1] << 8);
 }
-static inline uint32_t read_u32(const uint8_t* b, size_t len, size_t off) {
+static inline uint32_t rd32(const uint8_t* b, size_t len, size_t off) {
   if (off + 3 >= len) return 0;
-  return (uint32_t)b[off] | ((uint32_t)b[off+1] << 8) | ((uint32_t)b[off+2] << 16) | ((uint32_t)b[off+3] << 24);
+  return (uint32_t)b[off] | ((uint32_t)b[off+1]<<8) | ((uint32_t)b[off+2]<<16) | ((uint32_t)b[off+3]<<24);
 }
-static inline float read_float(const uint8_t* b, size_t len, size_t off) {
+static inline float rdF(const uint8_t* b, size_t len, size_t off) {
   if (off + 3 >= len) return 0.0f;
-  uint32_t v = read_u32(b, len, off);
-  float f;
-  memcpy(&f, &v, sizeof(f));
-  return f;
+  uint32_t v = rd32(b, len, off);
+  float f; memcpy(&f, &v, sizeof(f)); return f;
+}
+static inline uint8_t fto8(float v) {
+  if (v <= 0.0f) return 0;
+  if (v >= 1.0f) return 255;
+  return (uint8_t)(v * 255.0f);
 }
 
-// Very small, conservative parser: reads common fields with bounds checks.
-// Offsets are based on typical F1 UDP packet header patterns; adjust per year if needed.
-void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
-  // preserve previous values if parsing fails
-  // detect packetId at offset 5 (common in F1 UDP header)
-  uint8_t packetId = 0;
-  if (len > 5) packetId = read_u8(buf, len, 5);
+// ── Legacy parser for Go telemetry_sender (custom simple format) ──
+static void parseLegacy(const uint8_t* buf, size_t len, TelemetryFrame &out) {
+  uint8_t packetId = rd8(buf, len, 5);
+  if (len > 20) out.frameIdentifier = rd32(buf, len, 18);
+  size_t base = 24;
+  switch (packetId) {
+    case F1Packets::PACKET_ID_CAR_TELEMETRY:
+      if (len > base + 4) {
+        out.telemetry.speedKmh = rd16(buf, len, base);
+        out.telemetry.rpm      = rd16(buf, len, base + 2);
+      }
+      if (len > base + 9) {
+        out.telemetry.throttle = rd8(buf, len, base + 8);
+        out.telemetry.brake    = rd8(buf, len, base + 9);
+      }
+      if (len > base + 12) out.telemetry.gear = (int8_t)rd8(buf, len, base + 12);
+      if (len > base + 13) out.telemetry.drsActive = (rd8(buf, len, base + 13) != 0);
+      if (len > base + 14) out.telemetry.mfdPanelIndex = rd8(buf, len, base + 14);
+      break;
+    case F1Packets::PACKET_ID_CAR_STATUS:
+      if (len > base + 8) {
+        out.status.ersEnergy    = rd16(buf, len, base);
+        out.status.ersDeployMode = rd8(buf, len, base + 2);
+        out.status.fuel          = rdF(buf, len, base + 4);
+        out.status.brakeBias     = rd8(buf, len, base + 8);
+      }
+      break;
+    case F1Packets::PACKET_ID_LAP_DATA:
+      if (len > base + 5) {
+        out.lap.lastLapTime = rdF(buf, len, base);
+        out.lap.position    = rd8(buf, len, base + 4);
+        out.lap.pitStatus   = rd8(buf, len, base + 5);
+      }
+      break;
+  }
+}
 
-  // frame identifier often appears after header; try safe read
-  if (len > 20) {
-    out.frameIdentifier = read_u32(buf, len, 18);
+// ── Official F1 game parser (F1 22 / 23 / 24 / 25) ──
+void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
+  if (len < 8) return;
+
+  uint16_t fmt = rd16(buf, len, 0);
+  // Detect official F1 game by format year
+  if (fmt < 2022 || fmt > 2030) {
+    parseLegacy(buf, len, out);
+    return;
   }
 
+  // Header offsets differ between F1 22 and F1 23+
+  size_t hdrSize, pidOff, fidOff, pciOff;
+  if (fmt >= 2023) {
+    hdrSize = 29; pidOff = 6; fidOff = 19; pciOff = 27;
+  } else {
+    hdrSize = 24; pidOff = 5; fidOff = 18; pciOff = 22;
+  }
+  if (len < hdrSize) return;
+
+  uint8_t packetId = rd8(buf, len, pidOff);
+  uint8_t pci      = rd8(buf, len, pciOff);
+  if (pci >= 22) pci = 0;
+  out.frameIdentifier = rd32(buf, len, fidOff);
+
   switch (packetId) {
+
+    // ── Car Telemetry (packet 6) ──
+    // Per-car struct: 60 bytes (same layout F1 22-25)
+    //   +0  uint16 speed
+    //   +2  float  throttle (0.0-1.0)
+    //   +6  float  steer
+    //   +10 float  brake    (0.0-1.0)
+    //   +14 uint8  clutch
+    //   +15 int8   gear
+    //   +16 uint16 engineRPM
+    //   +18 uint8  drs
     case F1Packets::PACKET_ID_CAR_TELEMETRY: {
-      // Attempt to parse a single-car telemetry entry at a safe offset.
-      // Many F1 UDP formats place speed (uint16) and rpm (uint16) in the telemetry struct.
-      size_t base = 24; // conservative base offset after header
-      if (len > base + 4) {
-        uint16_t speed = read_u16(buf, len, base + 0);
-        uint16_t rpm = read_u16(buf, len, base + 2);
-        out.telemetry.speedKmh = speed;
-        out.telemetry.rpm = rpm;
-      }
-      // throttle & brake bytes (scaled 0-255)
-      if (len > base + 8) {
-        out.telemetry.throttle = read_u8(buf, len, base + 8);
-        out.telemetry.brake = read_u8(buf, len, base + 9);
-      }
-      // gear byte
-      if (len > base + 12) out.telemetry.gear = (int8_t)read_u8(buf, len, base + 12);
-      // drs flag
-      if (len > base + 13) out.telemetry.drsActive = (read_u8(buf, len, base + 13) != 0);
-      // mfd panel index (if present)
-      if (len > base + 14) out.telemetry.mfdPanelIndex = read_u8(buf, len, base + 14);
+      const size_t CS = 60;
+      size_t base = hdrSize + (size_t)pci * CS;
+      if (base + 19 > len) break;
+      out.telemetry.speedKmh = rd16(buf, len, base);
+      out.telemetry.throttle = fto8(rdF(buf, len, base + 2));
+      out.telemetry.brake    = fto8(rdF(buf, len, base + 10));
+      out.telemetry.gear     = (int8_t)rd8(buf, len, base + 15);
+      out.telemetry.rpm      = rd16(buf, len, base + 16);
+      out.telemetry.drsActive = (rd8(buf, len, base + 18) != 0);
+      // mfdPanelIndex after all 22 cars
+      size_t mfdOff = hdrSize + 22 * CS;
+      if (mfdOff < len) out.telemetry.mfdPanelIndex = rd8(buf, len, mfdOff);
     } break;
 
+    // ── Car Status (packet 7) ──
+    // Per-car: F1 22 = 47 bytes, F1 23+ = 55 bytes
+    //   +3  uint8  frontBrakeBias
+    //   +5  float  fuelInTank
+    //   ERS store energy: F1 22 at +29, F1 23+ at +37 (float, joules, max ~4MJ)
+    //   ERS deploy mode:  F1 22 at +33, F1 23+ at +41
     case F1Packets::PACKET_ID_CAR_STATUS: {
-      size_t base = 24;
-      if (len > base + 0) out.status.ersEnergy = read_u16(buf, len, base + 0);
-      if (len > base + 2) out.status.ersDeployMode = read_u8(buf, len, base + 2);
-      if (len > base + 4) out.status.fuel = read_float(buf, len, base + 4);
-      if (len > base + 8) out.status.brakeBias = read_u8(buf, len, base + 8);
+      size_t CS  = (fmt >= 2023) ? 55 : 47;
+      size_t base = hdrSize + (size_t)pci * CS;
+      if (base + 10 > len) break;
+      out.status.brakeBias = rd8(buf, len, base + 3);
+      out.status.fuel      = rdF(buf, len, base + 5);
+      size_t ersOff = (fmt >= 2023) ? 37 : 29;
+      if (base + ersOff + 5 > len) break;
+      float ersJ = rdF(buf, len, base + ersOff);
+      out.status.ersEnergy     = (uint16_t)(ersJ / 4000000.0f * 1000.0f);
+      out.status.ersDeployMode = rd8(buf, len, base + ersOff + 4);
     } break;
 
+    // ── Lap Data (packet 2) ──
+    // Per-car sizes (packed, from official spec):
+    //   F1 22: 43 bytes  → carPosition at +24, pitStatus at +26
+    //   F1 23: 50 bytes  → carPosition at +30, pitStatus at +32
+    //   F1 24+: 50 bytes → same as F1 23 (adjust if spec changes)
+    //   +0  uint32 lastLapTimeInMS
     case F1Packets::PACKET_ID_LAP_DATA: {
-      size_t base = 24;
-      if (len > base + 0) out.lap.lastLapTime = read_float(buf, len, base + 0);
-      if (len > base + 4) out.lap.position = read_u8(buf, len, base + 4);
-      if (len > base + 5) out.lap.pitStatus = read_u8(buf, len, base + 5);
+      size_t CS, posOff, pitOff;
+      if (fmt >= 2023)      { CS = 50; posOff = 30; pitOff = 32; }
+      else                  { CS = 43; posOff = 24; pitOff = 26; }
+      size_t base = hdrSize + (size_t)pci * CS;
+      if (base + pitOff + 1 > len) break;
+      uint32_t ms = rd32(buf, len, base);
+      out.lap.lastLapTime = (float)ms / 1000.0f;
+      out.lap.position    = rd8(buf, len, base + posOff);
+      out.lap.pitStatus   = rd8(buf, len, base + pitOff);
     } break;
 
-    default:
-      // Unknown or unsupported packet - ignore
-      break;
+    default: break;
   }
 }
