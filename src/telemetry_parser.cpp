@@ -116,7 +116,7 @@ void telemetry_parse(const uint8_t* buf, size_t len, TelemetryFrame &out) {
     case F1Packets::PACKET_ID_CAR_TELEMETRY: {
       const size_t CS = 60;
       size_t base = hdrSize + (size_t)pci * CS;
-      if (base + 40 > len) break;
+      if (base + CS > len) break;
       out.telemetry.speedKmh = rd16(buf, len, base);
       out.telemetry.throttle = fto8(rdF(buf, len, base + 2));
       out.telemetry.brake    = fto8(rdF(buf, len, base + 10));
