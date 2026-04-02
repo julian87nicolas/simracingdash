@@ -1,7 +1,7 @@
 #include "dashboard_manager.h"
 #include <TFT_eSPI.h>
 #include <Arduino.h>
-#include <qrcode.h>
+#include "qr_render.h"
 #include "telemetry_parser.h"
 #include "telemetry.h"
 #include "state.h"
@@ -29,24 +29,6 @@ static uint8_t g_stableMfd = 255;
 static uint32_t g_mfdChangeMs = 0;
 static const uint32_t MFD_DEBOUNCE_MS = 200;
 
-static void drawQRCode(TFT_eSPI* tft, const char* text, int xOffset, int yOffset, int pixelSize) {
-  QRCode qrcode;
-  uint8_t qrcodeData[qrcode_getBufferSize(3)];
-  qrcode_initText(&qrcode, qrcodeData, 3, ECC_LOW, text);
-  int qrSizePx = qrcode.size * pixelSize;
-  int border = pixelSize * 2;
-  tft->fillRect(xOffset - border, yOffset - border,
-                qrSizePx + border * 2, qrSizePx + border * 2, TFT_WHITE);
-  for (uint8_t y = 0; y < qrcode.size; y++) {
-    for (uint8_t x = 0; x < qrcode.size; x++) {
-      uint16_t color = qrcode_getModule(&qrcode, x, y) ? TFT_BLACK : TFT_WHITE;
-      tft->fillRect(xOffset + x * pixelSize, yOffset + y * pixelSize,
-                    pixelSize, pixelSize, color);
-    }
-  }
-}
-
-// Session type tracking for MFD mapping
 static uint8_t g_sessionType = 0;
 static bool isRaceSession() { return g_sessionType >= 10 && g_sessionType <= 12; }
 

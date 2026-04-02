@@ -5,7 +5,7 @@
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
 #include <TFT_eSPI.h>
-#include <qrcode.h>
+#include "qr_render.h"
 #include "udp_listener.h"
 #include "telemetry_parser.h"
 #include "state.h"
@@ -78,26 +78,6 @@ static void ensureDisplayInit() {
   g_displayInit = true;
 }
 
-static void drawQRCode(const char* text, int xOffset, int yOffset, int pixelSize) {
-  QRCode qrcode;
-  uint8_t qrcodeData[qrcode_getBufferSize(3)];
-  qrcode_initText(&qrcode, qrcodeData, 3, ECC_LOW, text);
-
-  // Draw white border around QR
-  int qrSizePx = qrcode.size * pixelSize;
-  int border = pixelSize * 2;
-  tft.fillRect(xOffset - border, yOffset - border,
-               qrSizePx + border * 2, qrSizePx + border * 2, TFT_WHITE);
-
-  for (uint8_t y = 0; y < qrcode.size; y++) {
-    for (uint8_t x = 0; x < qrcode.size; x++) {
-      uint16_t color = qrcode_getModule(&qrcode, x, y) ? TFT_BLACK : TFT_WHITE;
-      tft.fillRect(xOffset + x * pixelSize, yOffset + y * pixelSize,
-                   pixelSize, pixelSize, color);
-    }
-  }
-}
-
 static void showConfigByIPScreen(const IPAddress &apIP) {
   ensureDisplayInit();
   tft.fillScreen(TFT_BLACK);
@@ -110,7 +90,7 @@ static void showConfigByIPScreen(const IPAddress &apIP) {
   int qrSizePx = qrModules * qrPixel;
   int qrX = 30;
   int qrY = (320 - qrSizePx) / 2; // vertically centered
-  drawQRCode(url.c_str(), qrX, qrY, qrPixel);
+  drawQRCode(&tft, url.c_str(), qrX, qrY, qrPixel);
 
   // --- Right side: text info ---
   int textCenterX = 300; // center of right half
