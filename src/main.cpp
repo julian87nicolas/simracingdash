@@ -30,6 +30,9 @@ static SavedConfig g_cfg;
 // simple webserver for setup portal
 static ESP8266WebServer server(80);
 
+// One-time CSRF token for the /do-reset-wifi action (0 = no pending reset)
+static uint32_t g_resetToken = 0;
+
 // Display instance
 static TFT_eSPI tft = TFT_eSPI();
 static bool g_displayInit = false;
@@ -401,6 +404,10 @@ void setup() {
   // register status endpoint and reset-wifi endpoint, then start webserver
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/reset-wifi", HTTP_GET, [](){
+    // Generate a fresh one-time token for this page load
+    do { g_resetToken = ESP.random(); } while (g_resetToken == 0);
+    char tokenStr[16];
+    snprintf(tokenStr, sizeof(tokenStr), "%lu", (unsigned long)g_resetToken);
     String html = R"rawliteral(
 <!doctype html><html lang="es"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -423,6 +430,9 @@ button:hover{box-shadow:0 4px 16px rgba(225,6,0,.35)}
 <div class="divider"></div>
 <p>Se borrar&aacute; la configuraci&oacute;n WiFi actual y el dispositivo reiniciar&aacute; en modo AP para que puedas elegir otra red.</p>
 <form method="POST" action="/do-reset-wifi">
+<input type="hidden" name="csrf_token" value=")rawliteral";
+    html += tokenStr;
+    html += R"rawliteral(">
 <button type="submit">Borrar WiFi y reiniciar</button>
 </form>
 <button class="cancel" onclick="history.back()">Cancelar</button>
@@ -430,6 +440,27 @@ button:hover{box-shadow:0 4px 16px rgba(225,6,0,.35)}
     server.send(200, "text/html", html);
   });
   server.on("/do-reset-wifi", HTTP_POST, [](){
+    // Validate CSRF token: must match the one issued by GET /reset-wifi
+    static const char* kForbidden = "<html><body style='background:#0a0a0a;color:#fff;font-family:sans-serif;text-align:center;padding-top:40vh'><h2>Solicitud inv&aacute;lida (403)</h2></body></html>";
+    auto rejectRequest = [&]() {
+      g_resetToken = 0; // invalidate on any failed attempt
+      server.send(403, "text/html", kForbidden);
+    };
+
+    String submitted = server.arg("csrf_token");
+    // Validate: non-empty, digits only
+    if (submitted.length() == 0) { rejectRequest(); return; }
+    for (unsigned int i = 0; i < submitted.length(); i++) {
+      if (!isdigit((unsigned char)submitted[i])) { rejectRequest(); return; }
+    }
+    // Guard against values that would overflow uint32_t on 64-bit hosts
+    unsigned long parsed = strtoul(submitted.c_str(), nullptr, 10);
+    if (parsed > 0xFFFFFFFFUL) { rejectRequest(); return; }
+    uint32_t submittedToken = (uint32_t)parsed;
+    if (g_resetToken == 0 || submittedToken != g_resetToken) {
+      rejectRequest(); return;
+    }
+    g_resetToken = 0; // consume the token (one-time use)
     clearConfig();
     server.send(200, "text/html", "<html><body style='background:#0a0a0a;color:#fff;font-family:sans-serif;text-align:center;padding-top:40vh'><h2>WiFi borrado. Reiniciando...</h2></body></html>");
     delay(800);
