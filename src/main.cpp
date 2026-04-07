@@ -5,6 +5,7 @@
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
 #include <TFT_eSPI.h>
+#include <ArduinoJson.h>
 #include "qr_render.h"
 #include "udp_listener.h"
 #include "telemetry_parser.h"
@@ -261,23 +262,19 @@ static void handleScan() {
   // Scan must be done in STA or AP_STA mode
   WiFi.mode(WIFI_AP_STA);
   int n = WiFi.scanNetworks();
-  String json = "[";
+  // Each entry: {"ssid":"...","rssi":...,"enc":...} — allocate generously
+  DynamicJsonDocument doc(64 + n * 128);
+  JsonArray arr = doc.to<JsonArray>();
   for (int i = 0; i < n; i++) {
-    if (i > 0) json += ",";
-    json += "{\"ssid\":\"";
-    // Escape any quotes in SSID
-    String ssid = WiFi.SSID(i);
-    ssid.replace("\"", "\\\"");
-    json += ssid;
-    json += "\",\"rssi\":";
-    json += String(WiFi.RSSI(i));
-    json += ",\"enc\":";
-    json += String(WiFi.encryptionType(i) != ENC_TYPE_NONE ? 1 : 0);
-    json += "}";
+    JsonObject obj = arr.createNestedObject();
+    obj["ssid"] = WiFi.SSID(i);   // ArduinoJson handles all escaping
+    obj["rssi"] = WiFi.RSSI(i);
+    obj["enc"]  = (WiFi.encryptionType(i) != ENC_TYPE_NONE) ? 1 : 0;
   }
-  json += "]";
   WiFi.scanDelete();
   WiFi.mode(WIFI_AP);
+  String json;
+  serializeJson(doc, json);
   server.send(200, "application/json", json);
 }
 
