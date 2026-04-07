@@ -163,7 +163,7 @@ select option{background:#1e1e1e;color:#fff}
 .ssid-wrap .btn-row button:hover{border-color:#e10600;color:#e10600}
 .ssid-wrap .btn-row button.active{border-color:#e10600;color:#e10600}
 .ssid-wrap .btn-row button.loading{color:#555;pointer-events:none}
-btn,button{display:block;width:100%;padding:14px;background:linear-gradient(135deg,#e10600,#b30500);color:#fff;border:none;border-radius:10px;font-size:1em;font-weight:600;cursor:pointer;letter-spacing:.5px;margin-top:8px;transition:transform .15s,box-shadow .15s}
+button{display:block;width:100%;padding:14px;background:linear-gradient(135deg,#e10600,#b30500);color:#fff;border:none;border-radius:10px;font-size:1em;font-weight:600;cursor:pointer;letter-spacing:.5px;margin-top:8px;transition:transform .15s,box-shadow .15s}
 button:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(225,6,0,.35)}
 button:active{transform:translateY(0)}
 .footer{text-align:center;margin-top:20px;font-size:.72em;color:#444}
