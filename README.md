@@ -25,8 +25,8 @@ Proyecto de ejemplo: un dashboard en tiempo real para F1 2025 (PS5) usando un ES
 - `TFT_MOSI` → D7 (GPIO13)
 - `TFT_SCLK` → D5 (GPIO14)
 - `TFT_CS`   → D8 (GPIO15)
-- `TFT_DC`   → D3 (GPIO0)
-- `TFT_RST`  → D4 (GPIO2)
+- `TFT_DC`   → D4 (GPIO2)
+- `TFT_RST`  → D6 (GPIO12)
 - `TFT_BL`   → (opcional) pin de backlight si tu pantalla lo requiere
 
 Verifica la alimentación: muchas pantallas 480×320 requieren 3.3V señal pero 5V para la retroiluminación o nivel shifters — sigue la documentación de tu módulo.
@@ -206,6 +206,43 @@ cd -
 # ejecutar el emisor apuntando a la IP:PORT del receptor (por defecto 127.0.0.1:20777)
 ./build/telemetry_sender -addr 127.0.0.1:20777
 ```
+
+### Simulador interactivo (Python)
+
+`tools/test_dashboard.py` es un simulador interactivo que envía tramas F1 2025 reales al ESP8266 para probar todas las pantallas del dashboard sin necesidad del juego.
+
+**Requisitos:** Python 3 (sin dependencias externas).
+
+```bash
+# Enviar a la IP del NodeMCU
+python3 tools/test_dashboard.py 192.168.1.XXX 20777
+
+# O broadcast en la red local (default)
+python3 tools/test_dashboard.py
+```
+
+**Dos modos de operación:**
+
+- **MANUAL** — Controlás cada valor con el teclado.
+- **PLAY** (SPACE) — Simula vueltas realistas automáticamente: aceleraciones, frenadas, zonas DRS, consumo de combustible, desgaste de neumáticos, temperaturas que varían coherentemente.
+
+**Controles:**
+
+| Tecla | Acción |
+|-------|--------|
+| `1-6` | Seleccionar pantalla: 1=MAIN 2=SETUP 3=PITS 4=TYRES 5=TEMPS 6=ENGINE |
+| `SPACE` | Alternar entre modo PLAY y MANUAL |
+| `↑ / ↓` | RPM ±1000 (solo manual) |
+| `g / G` | Marcha arriba / abajo (solo manual) |
+| `t / T` | Acelerador ±25% (solo manual) |
+| `b / B` | Freno ±25% (solo manual) |
+| `d` | Toggle DRS (solo manual) |
+| `p` | Ciclar pit status (solo manual) |
+| `c` | Ciclar compuesto de neumático (solo manual) |
+| `r` | Randomizar todos los valores (solo manual) |
+| `q` | Salir |
+
+**Terminal con colores ANSI:** barras de RPM con zonas de color, acelerador/freno, temperaturas y desgaste con código de colores según severidad, indicador de modo PLAY/MANUAL, segmento de pista actual en modo play.
 
 Notas:
 - El emisor permite probar que el receptor (ESP o cualquier listener UDP) reciba paquetes correctamente.
