@@ -192,21 +192,6 @@ PlatformIO tests live under `test/` (Unity). Host-side helper tests live under `
 Emulación local (sin placa ni pantalla)
 -------------------------------------
 
-Puedes probar la lógica de parser y envío de telemetría usando el emisor incluido:
-
-- `tools/telemetry_sender`: pequeño servidor en Go que envía paquetes UDP simulando telemetría de F1.
-
-Compilar y ejecutar el emisor:
-
-```bash
-cd tools/telemetry_sender
-go build -o ../../build/telemetry_sender main.go
-cd -
-
-# ejecutar el emisor apuntando a la IP:PORT del receptor (por defecto 127.0.0.1:20777)
-./build/telemetry_sender -addr 127.0.0.1:20777
-```
-
 ### Simulador interactivo (Python)
 
 `tools/test_dashboard.py` es un simulador interactivo que envía tramas F1 2025 reales al ESP8266 para probar todas las pantallas del dashboard sin necesidad del juego.
@@ -244,35 +229,12 @@ python3 tools/test_dashboard.py
 
 **Terminal con colores ANSI:** barras de RPM con zonas de color, acelerador/freno, temperaturas y desgaste con código de colores según severidad, indicador de modo PLAY/MANUAL, segmento de pista actual en modo play.
 
-Notas:
-- El emisor permite probar que el receptor (ESP o cualquier listener UDP) reciba paquetes correctamente.
-
 Scripts (conveniencia)
 ----------------------
 
-Se incluyen scripts para simplificar la compilación y ejecución en `scripts/`.
-
-
-- `scripts/build_sender.sh`: compila el emisor Go y coloca el binario en `build/telemetry_sender`.
-- `scripts/build_all.sh`: compila los artefactos necesarios (ahora solo el emisor).
-- `scripts/run_sender.sh`: ejecuta `build/telemetry_sender` (acepta un argumento `IP:PORT`, por defecto `127.0.0.1:20777`).
-- `scripts/run_both.sh`: construye y ejecuta el emisor.
-
-Ejemplos rápidos:
+- `scripts/clean_build.sh`: limpia directorios de build de PlatformIO (`.pio`, `.pioenvs`, `.cache`) para forzar una recompilación limpia.
 
 ```bash
-# construir todo (emisor)
-./scripts/build_all.sh
-
-# ejecutar emisor (terminal)
-./scripts/run_sender.sh 127.0.0.1:20777
-
-# o construir y ejecutar (scripts/run_both.sh)
-./scripts/run_both.sh 127.0.0.1:20777
+./scripts/clean_build.sh
 ```
-
-Notas sobre salida en terminal:
-- El emulador usa secuencias ANSI para redibujar la pantalla "en sitio" (sin hacer scroll). Si ves muchas líneas nuevas, asegúrate de ejecutar el binario recién compilado y de no tener instancias antiguas corriendo.
-- Si quieres una visual más detallada puedo aumentar la resolución del canvas ASCII o crear una versión SDL/PNG.
-
 
