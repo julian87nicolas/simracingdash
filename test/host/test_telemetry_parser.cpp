@@ -288,6 +288,114 @@ static void test_f2022_car_status() {
   std::cout << "PASS: f2022_car_status\n";
 }
 
+// ─── F1 24 path (same header as F1 23, but CarSetup is 50 bytes) ──────────────
+
+static void test_f2024_car_setup() {
+  // hdrSize=29, CS=50 (F1 24+), diffOnThrottle at base+2, offThrottle at base+3
+  const size_t BUFSZ = 80;
+  uint8_t buf[BUFSZ];
+  memset(buf, 0, BUFSZ);
+  writeU16(buf, 0, 2024);
+  buf[6]  = F1Packets::PACKET_ID_CAR_SETUP;
+  buf[27] = 0;  // pci=0
+
+  buf[31] = 70;  // diffOnThrottle at base+2
+  buf[32] = 45;  // diffOffThrottle at base+3
+
+  TelemetryFrame out{};
+  telemetry_parse(buf, BUFSZ, out);
+
+  assert(out.status.diffOnThrottle  == 70);
+  assert(out.status.diffOffThrottle == 45);
+  std::cout << "PASS: f2024_car_setup\n";
+}
+
+// ─── F1 25 path ───────────────────────────────────────────────────────────────
+
+static void test_f2025_car_setup() {
+  // F1 25 uses CS=50 (same as F1 24). hdrSize=29, pciOff=27
+  const size_t BUFSZ = 80;
+  uint8_t buf[BUFSZ];
+  memset(buf, 0, BUFSZ);
+  writeU16(buf, 0, 2025);
+  buf[6]  = F1Packets::PACKET_ID_CAR_SETUP;
+  buf[27] = 0;
+
+  buf[31] = 80;  // diffOnThrottle
+  buf[32] = 35;  // diffOffThrottle
+
+  TelemetryFrame out{};
+  telemetry_parse(buf, BUFSZ, out);
+
+  assert(out.status.diffOnThrottle  == 80);
+  assert(out.status.diffOffThrottle == 35);
+  std::cout << "PASS: f2025_car_setup\n";
+}
+
+static void test_f2025_car_damage() {
+  // F1 25: CS=46, ewOff=38, gboxOff=36. hdrSize=29, base=29
+  const size_t BUFSZ = 80;
+  uint8_t buf[BUFSZ];
+  memset(buf, 0, BUFSZ);
+  writeU16(buf, 0, 2025);
+  buf[6]  = F1Packets::PACKET_ID_CAR_DAMAGE;
+  buf[27] = 0;
+
+  // tyresWear as float[4] at base+0..+15, packet order RL,RR,FL,FR
+  writeF32(buf, 29, 10.0f);  // RL
+  writeF32(buf, 33, 12.0f);  // RR
+  writeF32(buf, 37, 18.0f);  // FL
+  writeF32(buf, 41, 22.0f);  // FR
+  // engine wear at base+ewOff = 29+38 = 67
+  buf[67] = 5;   // MGUHWear
+  buf[68] = 10;  // ESWear
+  buf[69] = 15;  // CEWear
+  buf[70] = 20;  // ICEWear
+  buf[71] = 25;  // MGUKWear
+  buf[72] = 30;  // TCWear
+  // gearbox at base+gboxOff = 29+36 = 65
+  buf[65] = 8;
+
+  TelemetryFrame out{};
+  telemetry_parse(buf, BUFSZ, out);
+
+  // stored FL,FR,RL,RR
+  assert(out.damage.tyresWear[0] == 18);  // FL
+  assert(out.damage.tyresWear[1] == 22);  // FR
+  assert(out.damage.tyresWear[2] == 10);  // RL
+  assert(out.damage.tyresWear[3] == 12);  // RR
+  assert(out.damage.engineMGUHWear == 5);
+  assert(out.damage.engineESWear   == 10);
+  assert(out.damage.engineCEWear   == 15);
+  assert(out.damage.engineICEWear  == 20);
+  assert(out.damage.engineMGUKWear == 25);
+  assert(out.damage.engineTCWear   == 30);
+  assert(out.damage.gearBoxDamage  == 8);
+  std::cout << "PASS: f2025_car_damage\n";
+}
+
+static void test_f2025_lap_data() {
+  // F1 25 uses same lap data as F1 23+: CS=50, posOff=30, pitOff=32
+  const size_t BUFSZ = 70;
+  uint8_t buf[BUFSZ];
+  memset(buf, 0, BUFSZ);
+  writeU16(buf, 0, 2025);
+  buf[6]  = F1Packets::PACKET_ID_LAP_DATA;
+  buf[27] = 0;
+
+  writeU32(buf, 29, 73456);  // 73.456s
+  buf[59] = 1;               // P1
+  buf[61] = 0;               // not in pit
+
+  TelemetryFrame out{};
+  telemetry_parse(buf, BUFSZ, out);
+
+  assert(out.lap.lastLapTime > 73.45f && out.lap.lastLapTime < 73.46f);
+  assert(out.lap.position == 1);
+  assert(out.lap.pitStatus == 0);
+  std::cout << "PASS: f2025_lap_data\n";
+}
+
 int main() {
   test_legacy_telemetry();
 
@@ -300,6 +408,12 @@ int main() {
   test_f2023_car_damage();
 
   test_f2022_car_status();
+
+  test_f2024_car_setup();
+
+  test_f2025_car_setup();
+  test_f2025_car_damage();
+  test_f2025_lap_data();
 
   std::cout << "All telemetry_parser tests passed\n";
   return 0;

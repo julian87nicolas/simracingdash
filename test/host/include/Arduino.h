@@ -11,6 +11,7 @@ using uint16_t = std::uint16_t;
 using uint32_t = std::uint32_t;
 
 inline void delay(unsigned long ms) { (void)ms; }
+inline unsigned long millis() { static unsigned long t = 0; return t++; }
 
 inline int min(int a, int b) { return (a < b) ? a : b; }
 inline int max(int a, int b) { return (a > b) ? a : b; }

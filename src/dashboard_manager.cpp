@@ -1,6 +1,7 @@
 #include "dashboard_manager.h"
 #include <TFT_eSPI.h>
 #include <Arduino.h>
+#include "qr_render.h"
 #include "telemetry_parser.h"
 #include "telemetry.h"
 #include "state.h"
@@ -28,7 +29,6 @@ static uint8_t g_stableMfd = 255;
 static uint32_t g_mfdChangeMs = 0;
 static const uint32_t MFD_DEBOUNCE_MS = 200;
 
-// Session type tracking for MFD mapping
 static uint8_t g_sessionType = 0;
 static bool isRaceSession() { return g_sessionType >= 10 && g_sessionType <= 12; }
 
@@ -169,6 +169,28 @@ void dashboard_showNetworkInfo(const char* ip, uint16_t port, bool waitingData) 
     g_tft->drawString("Sin datos hace 10s", 240, 190);
     g_tft->drawString("Reanudando al recibir telemetria", 240, 220);
   }
+
+  // Show reset-wifi QR (right side) with label (left side)
+  g_tft->drawLine(40, 240, 440, 240, TFT_DARKGREY);
+  char resetUrl[64];
+  snprintf(resetUrl, sizeof(resetUrl), "http://%s/reset-wifi", ip);
+  // QR: version 3 = 29 modules, pixel size 2 => 58px + 8px border = 66px total
+  int qrPixel = 2;
+  int qrSize = 29 * qrPixel; // 58px
+  int qrBorder = qrPixel * 2;
+  int qrX = 380;
+  int qrY = 252;
+  drawQRCode(g_tft, resetUrl, qrX, qrY, qrPixel);
+  // Text to the left of the QR
+  g_tft->setTextDatum(MR_DATUM); // middle-right aligned
+  g_tft->setTextColor(TFT_DARKGREY, TFT_BLACK);
+  g_tft->setTextFont(2);
+  int textX = qrX - qrBorder - 12;
+  int textCY = qrY + qrSize / 2;
+  g_tft->drawString("Cambiar red WiFi ->", textX, textCY - 8);
+  g_tft->setTextFont(1);
+  g_tft->drawString("Escanea el QR", textX, textCY + 10);
+  g_tft->setTextDatum(MC_DATUM); // restore default
 }
 
 void dashboard_hideNetworkInfo() {

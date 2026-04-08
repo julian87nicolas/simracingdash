@@ -12,9 +12,9 @@
 // ESP8266 SPI pins (NodeMCU v2)
 #define TFT_MOSI D7
 #define TFT_SCLK D5
-#define TFT_CS   D0
-#define TFT_DC   D1
-#define TFT_RST  D2
+#define TFT_CS   D8
+#define TFT_DC   D4
+#define TFT_RST  D6
 // Optional backlight pin
 //#define TFT_BL  D2
 

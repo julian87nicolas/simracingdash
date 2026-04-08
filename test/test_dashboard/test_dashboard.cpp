@@ -13,14 +13,28 @@ void test_dash_main_render() {
   f.telemetry.throttle = 250;
   f.telemetry.brake = 0;
 
+  int before = tft.call_count;
   drawMainDashboard(&tft, f);
+  TEST_ASSERT_GREATER_THAN(before, tft.call_count);
+}
 
-  // If it compiles and runs without crash, consider pass
-  TEST_ASSERT_TRUE(true);
+void test_dash_main_edge_values() {
+  TFT_eSPI tft;
+  TelemetryFrame f{};
+  f.telemetry.speedKmh = 0;
+  f.telemetry.rpm = 0;
+  f.telemetry.gear = -1;
+  f.telemetry.throttle = 0;
+  f.telemetry.brake = 255;
+  f.telemetry.drsActive = true;
+
+  drawMainDashboard(&tft, f);
+  TEST_ASSERT_GREATER_THAN(0, tft.call_count);
 }
 
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_dash_main_render);
+  RUN_TEST(test_dash_main_edge_values);
   return UNITY_END();
 }
