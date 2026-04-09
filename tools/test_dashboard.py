@@ -32,7 +32,6 @@ Usage:
 import socket
 import struct
 import sys
-import math
 import random
 import time
 import select
@@ -716,7 +715,8 @@ def main():
     interval = 1.0 / SEND_HZ
 
     # Save terminal settings and switch to raw mode
-    old_settings = termios.tcgetattr(sys.stdin)
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
     try:
         tty.setcbreak(sys.stdin.fileno())
         print_status(state, play_mode, play_sim)
@@ -800,8 +800,6 @@ def main():
             # mfdPanelIndex, telemetry basics, status, and lap data.
             # Heavy F1-format packets rotate one per cycle for data the
             # legacy format can't carry (temps, wear, session type, diff).
-            # NOTE: heavy telemetry (packetId 6) is excluded from rotation
-            # because it also writes mfdPanelIndex and can conflict.
             if now - last_send >= interval:
                 last_send = now
                 state.frame += 1
@@ -812,7 +810,6 @@ def main():
                 sock.sendto(make_legacy_lap(state), (ip, port))
 
                 # Rotate one heavy F1-format packet per cycle (~4 Hz each)
-                # NO heavy telemetry here — it would overwrite mfdPanelIndex
                 heavy = [
                     make_session_packet,    # session type (race detection)
                     make_telemetry_packet,  # temps (brakes, tyres, engine)
@@ -827,7 +824,7 @@ def main():
             time.sleep(0.005)
 
     finally:
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         sock.close()
         print(f"\n{C.CYAN}Bye!{C.RST}")
 

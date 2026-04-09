@@ -8,7 +8,7 @@ El firmware escucha paquetes UDP en el puerto 20777, parsea telemetría oficial 
 - `platformio.ini` — configuración de build (env `nodemcuv2` y `native` para pruebas)
 - `include/` — cabeceras públicas (`telemetry.h`, `state.h`, ...)
 - `src/` — código fuente (listener UDP, parser, state, dashboard manager)
-- `src/dashboards/` — renderers por pantalla (dash_main, dash_setup, dash_pits, dash_tyres, dash_temps, dash_ers)
+- `src/dashboards/` — renderers por pantalla (`dash_main`, `dash_damage`, `dash_pits`, `dash_tyres`, `dash_temps`, `dash_ers`)
 - `tools/` — simulador interactivo Python para pruebas sin el juego
 - `test/` — pruebas PlatformIO (Unity) y `test/host/` pruebas host-side (g++)
 - `scripts/` — scripts de conveniencia (`clean_build.sh`)
@@ -127,7 +127,11 @@ Emulación local (sin placa ni pantalla)
 
 `tools/test_dashboard.py` es un simulador interactivo que envía tramas F1 2025 reales al ESP8266 para probar todas las pantallas del dashboard sin necesidad del juego.
 
-**Requisitos:** Python 3 (sin dependencias externas).
+**Requisitos:** Python 3, ejecutado desde una terminal interactiva real.
+
+**Plataformas soportadas:** macOS y Linux (o entornos Unix compatibles), ya que el script usa entrada de teclado basada en `termios` / `tty`.
+
+**Nota:** actualmente el modo interactivo no está soportado en Windows y puede no funcionar correctamente en entornos no-TTY (por ejemplo, algunas consolas integradas, pipes o CI).
 
 ```bash
 # Enviar a la IP del NodeMCU
