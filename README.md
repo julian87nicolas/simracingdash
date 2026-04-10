@@ -99,6 +99,27 @@ CI: GitHub Actions en `.github/workflows/ci.yml`.
 
 ---
 
+Releases y versionado
+---------------------
+
+El proyecto usa versionado semántico (`vMAJOR.MINOR.PATCH`) gestionado a través de GitHub Actions.
+
+### Crear un tag y release manualmente
+
+1. Ir a **Actions → Tag and Release → Run workflow** en GitHub.
+2. (Opcional) Ingresar la versión deseada, p. ej. `v1.2.0`. Si se deja en blanco, el workflow auto-incrementa el parche del último tag `vX.Y.Z` (parte de `v1.0.0` si no existen tags previos).
+3. Hacer clic en **Run workflow**.
+
+El workflow (`.github/workflows/tag-release.yml`) realiza los siguientes pasos:
+
+| Paso | Descripción |
+|------|-------------|
+| Determinar versión | Lee el input; si está vacío, obtiene el último tag semver con `git tag --sort=-version:refname` e incrementa el parche. Normaliza para que siempre empiece con `v`. |
+| Crear y pushear tag | Crea un tag anotado en el commit actual y lo sube al repositorio. |
+| Crear GitHub Release | Abre una Release en GitHub vinculada al tag usando la API. |
+
+---
+
 Características
 ---------------
 
